@@ -5,6 +5,7 @@ def test_defaults():
     settings = Settings(_env_file=None)
     assert settings.environment == "dev"
     assert settings.default_mode == "single"
+    assert settings.default_top_k == 10
     assert settings.max_upload_mb == 10
     assert settings.max_pages == 200
 

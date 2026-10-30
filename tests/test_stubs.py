@@ -14,10 +14,9 @@ DOC_ID = "3f6c1e2a-9b7d-4c1e-8a55-0d2f4b6e7a10"
         ("post", "/v1/documents", {"files": {"file": PDF}}),
         ("get", "/v1/documents", {}),
         ("delete", f"/v1/documents/{DOC_ID}", {}),
-        ("post", "/v1/query", {"json": {"question": "What is self-attention?"}}),
     ],
 )
-def test_v1_routes_are_stubs_that_return_problem_json(method, path, kwargs):
+def test_document_routes_are_stubs_that_return_problem_json(method, path, kwargs):
     response = getattr(client, method)(path, **kwargs)
     assert response.status_code == 501
     assert response.headers["content-type"].startswith("application/problem+json")

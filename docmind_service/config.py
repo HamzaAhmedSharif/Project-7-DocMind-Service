@@ -12,6 +12,7 @@ class Settings(BaseSettings):
 
     environment: Literal["dev", "test", "prod"] = "dev"
     log_level: str = "INFO"
+    default_top_k: int = Field(default=10, ge=1, le=20)
     max_upload_mb: int = Field(default=10, ge=1, le=50)
     max_pages: int = Field(default=200, ge=1, le=1000)
     default_mode: Literal["single", "multi"] = "single"

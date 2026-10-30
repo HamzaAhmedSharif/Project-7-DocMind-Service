@@ -1,5 +1,5 @@
 from datetime import datetime
-from typing import Literal
+from typing import Annotated, Literal
 from uuid import UUID
 
 from pydantic import BaseModel, Field
@@ -40,7 +40,7 @@ class DocumentList(BaseModel):
 
 class QueryIn(BaseModel):
     question: str = Field(min_length=1, max_length=2000)
-    document_ids: list[UUID] | None = None
+    document_ids: Annotated[list[UUID], Field(min_length=1, max_length=100)] | None = None
     mode: Literal["single", "multi"] = "single"
     top_k: int | None = Field(default=None, ge=1, le=20)
 
