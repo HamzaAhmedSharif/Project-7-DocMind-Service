@@ -72,3 +72,9 @@ Notes are recorded in the milestone sections below.
 - Fix: the JSON formatter now writes only the exception type and the stack frames; a filter on the `uvicorn.error` logger does the same for uvicorn's records; the `docmind` logger no longer propagates to the root logger. Evidence: three unit tests, and a real-server check in which a retriever that raised with the question in its message left 2 occurrences of the question in the server logs before the fix and 0 after.
 - Tradeoff accepted: debugging an unexpected error relies on the exception type and the stack frames, not the message.
 - Lesson: test the failure path of a redaction claim with a unique string; a test that only covers success proves nothing about the paths that fail.
+
+### Note: Starlette deprecates httpx in its test client
+- Symptom: pytest warned that using httpx with the Starlette test client is deprecated and to install httpx2.
+- Cause: the test client is moving to a different HTTP library.
+- Fix: `requirements-dev.txt` now pins httpx2 2.16.0 in place of httpx; the full suite passes with only httpx2 installed and the warning is gone.
+- Lesson: read the warnings of a green run; the next dependency upgrade would have turned this one into a failure.
