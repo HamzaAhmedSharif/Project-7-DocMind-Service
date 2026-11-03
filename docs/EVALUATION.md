@@ -96,7 +96,4 @@ so only the evaluation gates can object. It exists to prove that the same
 change that cost Project 6 31 percentage points (92.3% → 61.5% key-fact recall)
 is stopped at review time here, not discovered after deployment.
 
-Pending `[H7]`: this section is completed after Hamza pushes the branch and opens
-the pull request. It will then record the PR URL, the URL of the failing run,
-the E2 and E3 values from the gate-table comment, and one sentence on what the
-failure demonstrates.
+Completed 2026-11-03. Pull request: https://github.com/HamzaAhmedSharif/Project-7-DocMind-Service/pull/8 — failing run: https://github.com/HamzaAhmedSharif/Project-7-DocMind-Service/actions/runs/41664131689. The gate table posted on the PR by CI reads: E2 = 0.080 against a >= 0.90 gate (FAIL, gating); E3 = 26/26 against >= 23 (PASS); E1_min and E1_mean both 1.0 (PASS). Lint, unit, security, and image all passed; release was skipped (main-only). The PR was blocked from merging by the branch protection on main and was closed unmerged. The change passed every unit test and every other check, and only the retrieval gate caught it — chunking regressions are now stopped at review time by measurement, not discovered after deployment.
