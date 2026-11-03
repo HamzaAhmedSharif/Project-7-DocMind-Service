@@ -1,0 +1,29 @@
+# Render blueprint (M5.4)
+# Verify every key against: https://render.com/docs/blueprint-spec
+services:
+  - type: web
+    name: docmind-service
+    runtime: docker
+    plan: free
+    region: frankfurt
+    dockerfilePath: ./Dockerfile
+    healthCheckPath: /healthz
+    autoDeployTrigger: checksPass
+    envVars:
+      - {key: DOCMIND_ENVIRONMENT, value: prod}
+      - {key: DOCMIND_LLM_PROVIDER, value: hosted}
+      - {key: DOCMIND_UPLOADS_ENABLED, value: "false"}
+      - {key: DOCMIND_TRUST_PROXY_HOPS, value: "1"}
+      - {key: DOCMIND_AUTO_MIGRATE, value: "true"}
+      - {key: DOCMIND_DATABASE_URL, sync: false}
+      - {key: DOCMIND_DATABASE_URL_DIRECT, sync: false}
+      - {key: DOCMIND_LLM_API_KEY, sync: false}
+# If `checksPass` is not available for the free plan, fall back to:
+#   autoDeployTrigger: off
+# plus a `deploy` job in ci.yml (after `release`, main only) that calls
+# Render's deploy hook with `curl -fsS -X POST "$RENDER_DEPLOY_HOOK_URL"`
+# (the URL is a GitHub secret created in [H5], never printed).
+# The health check path must remain /healthz (it never touches the database;
+# polling /readyz would keep Neon awake and burn its free compute hours).
+# No scheduled pings, anywhere.
+# The app binds $PORT (Render sets it); /healthz reports RENDER_GIT_COMMIT as the commit.
