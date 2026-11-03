@@ -201,3 +201,75 @@ Notes are recorded in the milestone sections below.
 - Verification: pinned binary over the full history: `10 commits scanned`, `no leaks found`, `EXIT=0`; unit `93 passed`; integration/model `9 passed`.
 - Lesson: run the pinned binary over the full history locally before every push from now on.
 
+
+## M4 - CI/CD with quality gates, image, security scans (2026-11-03)
+
+### Decision: Linux lock file generated inside the base image
+- Context: the service must install from a lock file that CI and the image can reproduce, and the development machines are Windows (pip freeze there would leak Windows-only packages).
+- Chosen: `scripts/make_lock.ps1` regenerates `requirements.lock` inside `python:3.12-slim-bookworm` from `requirements.txt`; the lock is committed (55 pins) and installed in the Dockerfile and both CI Python jobs. Verified: it contains `fastapi==`, `fastembed==`, `onnxruntime==`, `psycopg==` and no `pywin32` or `colorama`. Dependabot pip PRs change `requirements.txt`, so `scripts\make_lock.ps1` must be run before such a PR is merged.
+- Rejected: running `pip freeze` on Windows; unpinned installs in the image (not reproducible).
+- Tradeoff accepted: one manual regeneration step whenever a dependency changes; a PR that forgets it installs the old lock in CI and fails visibly.
+- Would revisit if: Dependabot can regenerate the lock automatically (it cannot today).
+
+### Decision: single-stage non-root image with the ONNX model baked in
+- Context: the deployment target has 512 MB RAM and no model cache; a runtime model download would need Hugging Face access on every cold start, and the free tier spins down.
+- Chosen: one `python:3.12-slim-bookworm` stage, `pip install -r requirements.lock`, one build-time `TextEmbedding` call that downloads MiniLM into `/opt/models` (owned by the app user), `USER app` with uid 10001, healthcheck on `/healthz`. Verified: `docker run --rm docmind-service:local id -u` is `10001`; the offline test (`--network none`, load the model, embed, print shape and norm) prints `(384,) 1.0`. Image size 987,185,947 bytes. Base image digest `python@sha256:e697c81897302a4c4333bade000d98038fbb21eb064f8ee1fd42d02ebcd9d337`.
+- Rejected: multi-stage build (the model files and site-packages must ship anyway; the stage split would add moving parts without shrinking the final layer set); PyTorch images (multi-GB, fails the memory ladder by design).
+- Tradeoff accepted: ~941 MiB uncompressed image; a change to `requirements.lock` invalidates the model layer as well.
+- Would revisit if: image size becomes a deploy constraint or the model is swapped for a quantized file in the memory ladder.
+
+### Decision: the evaluation runs on the shipped defaults
+- Context: a gate must exercise what ships; a parallel set of eval-only constants would let code and evaluation drift apart, and the M4.9 evidence branch deliberately changes exactly those defaults.
+- Chosen: `evaluation/run_retrieval.py` chunks through `chunk_pages(pages)` (the `CHUNK_WORDS`/`CHUNK_OVERLAP` defaults from `docmind_service.chunking`) and retrieves with `get_settings().default_top_k` (10 today), recorded as `top_k` in the results file. `tests/test_eval_defaults.py` parses the module and fails on a numeric `top_k=`, `words=` or `overlap=` literal, and on a missing `get_settings` call.
+- Rejected: keeping `top_k=10` hard-coded in the runner (it happens to equal today's default, which is exactly why the divergence would go unnoticed when the default changes).
+- Tradeoff accepted: an environment variable that changes `DOCMIND_DEFAULT_TOP_K` also changes the evaluation; CI sets none, and the results file records the effective value.
+- Would revisit if: the gates must pin their own top-k independently of the shipped default (that would need a gates.json field and a recorded decision).
+
+### Decision: Trivy and pip-audit policy
+- Context: security gates must block real fixable risk without freezing the build on issues that have no fix.
+- Chosen: `pip-audit==2.10.1` audits `requirements.lock` with `--no-deps --disable-pip`; any finding blocks, and an unfixable false positive may only be ignored with `--ignore-vuln <ID>` plus a Note with an expiry date. Trivy `0.76.0` blocks on CRITICAL **with a fix** (`--ignore-unfixed --exit-code 1`) and reports HIGH+CRITICAL without blocking. Measured locally on the built image: blocking scan exit 0; report scan 38 findings (36 HIGH, 2 CRITICAL), both CRITICALs (`libsqlite3-0` CVE-2025-7458, `zlib1g` CVE-2023-45853) unfixed/`will_not_fix` in Debian bookworm, therefore ignored by the blocking policy.
+- Rejected: blocking on HIGH (would block on every Debian base refresh); scanning with `latest` (unpinned).
+- Tradeoff accepted: HIGH findings are visible but do not block; any CRITICAL fix in the base image will block until the base is rebuilt.
+- Would revisit if: HIGH findings start including the Python layer and a fix exists.
+
+### Decision: all third-party actions pinned to full commit SHAs
+- Context: a mutable tag (`@v4`) is a supply-chain hole; the instructions require full SHAs where resolvable.
+- Chosen: `actions/checkout@11d5960a326750d5838078e36cf38b85af677262` (v4), `actions/setup-python@a26af69be951a213d495a4c3e4e4022e16d87065` (v5), `actions/cache@0057852bfaa89a56745cba8c7296529d2fc39830` (v4), `actions/upload-artifact@ea165f8d65b6e75b540449e92b4886f43607fa02` (v4), `docker/login-action@c94ce9fb468520275223c153574b00df6fe4bcc9` (v3), each with the tag as a trailing comment. Resolved through the GitHub API (`git/ref/tags/<tag>`, dereferenced where needed). Images: `pgvector/pgvector:pg17` (service), `aquasec/trivy:0.76.0`, `python:3.12-slim-bookworm` (digest above); Dependabot's `docker` ecosystem keeps the base and Trivy tags fresh.
+- Rejected: major-version tags with a comment only (what the template showed) — the manager's checkpoint greps for unpinned tools.
+- Tradeoff accepted: Dependabot PRs for actions must rewrite the SHA; the trailing comment keeps the version readable.
+- Would revisit if: a repository cannot be resolved (the rule allows keeping the major tag with a recorded reason; none was needed).
+
+### Decision: compose-based smoke test instead of mocking the service
+- Context: the M4 smoke test must prove the shipped image can start, migrate, ingest, answer and refuse — not that a mock matches another mock.
+- Chosen: the `image` CI job runs `docker compose -f deploy/compose.ci.yml up -d --build --wait` (app + pgvector database, fake LLM) and then `scripts/smoke_http.py --mode ci` against `127.0.0.1:8000`: 13 checks over real HTTP (health, readiness, upload 201/200 dedupe, list, answer with citation and request-id header, no-evidence refusal with zero calls, 422 problem+json for an empty question, 422 for non-PDF bytes, delete 204/404, refusal after delete). The script is stdlib-only, so the runner needs no Python dependencies; only the `multipart` helper and the parser are unit-tested, the full run is exercised by the job (as the script requires).
+- Rejected: TestClient-based smoke (it bypasses the container, networking, migrations and the baked model); a shell script with curl (less readable assertions, no portable exit-code summary).
+- Tradeoff accepted: the job takes the compose build time; a failure prints the last 200 log lines and always tears the stack down.
+- Would revisit if: the compose startup needs more than the job's timeout.
+
+### Decision: evidence pull request with a plausible, measured regression
+- Context: the milestone must prove the retrieval gate blocks a genuine regression, not that a bad workflow file fails.
+- Chosen: branch `evidence/bad-chunking` changes only the shipped defaults a reviewer might plausibly "optimize": `CHUNK_WORDS = 800` in `chunking.py` and `default_top_k = 4` in `config.py`, with the unit tests that assert those defaults updated so G1, G2 and G3 stay green. Locally `scripts\check.ps1` passes; `scripts\check.ps1 -Integration -Eval` must fail E2 (chunk ordinals no longer match the reference) and E3 (top-4 of 800-word chunks misses facts, as in Project 6's 92.3% → 61.5%). The branch is pushed only by Hamza (`[H7]`), never merged; the PR comment carries the gate table. This is the same regression that cost Project 6 31 percentage points, now stopped at review time.
+- Rejected: a PR that deletes a test or edits the workflow (proves only that reviews work, not that the gate works).
+- Tradeoff accepted: the branch is dead weight kept as evidence; the repository keeps `main` clean and the branch unmerged.
+- Would revisit if: the gates change such that the designed regression no longer fails them.
+
+### Decision: Dependabot with three ecosystems and a small PR budget
+- Context: dependency freshness should not flood the repository, and pip PRs must not silently break the lock.
+- Chosen: `.github/dependabot.yml` runs weekly for `pip`, `github-actions` and `docker`, `open-pull-requests-limit: 3` each. Pip PRs change `requirements.txt`; `scripts\make_lock.ps1` must be run in the PR before merge (also recorded in `docs/EVALUATION.md`'s reproduction section and here).
+- Rejected: daily updates; grouping rules (premature for a one-person project).
+- Tradeoff accepted: a manual lock regeneration per pip PR.
+- Would revisit if: update volume grows or the lock regeneration is automated.
+
+### Note: pins chosen for the M4.6 workflow template (2026-11-03)
+- `pip-audit==2.10.1` — newest stable on PyPI, released 2026-06-10, well past the 14-day rule.
+- `aquasec/trivy:0.76.0` — newest stable Trivy release that is at least 14 days old: 0.76.0 was published 2026-10-14; 0.76.1 was published 2026-10-21 and was 13 days old on 2026-11-03, so it was excluded. The tag was verified by pulling `aquasec/trivy:0.76.0` from Docker Hub (digest `sha256:2416d1f74045b57274df1a340eee6b510cacd73c66a6ccb8da092b117eb7d222`), and the local scans printed "Version 0.76.1 of Trivy is now available".
+- Third-party actions: full SHAs as listed in the decision above; the manager checkpoint greps that no `<pinned` remains and no unpinned tool is referenced (`ubuntu-latest` runner labels and the intentional `:latest` GHCR tag are the only "latest" strings).
+- The template had two YAML bugs that actionlint 1.7.7 rejected: unquoted step names containing a colon (`Trivy (blocking: ...)`, `Trivy (report: ...)`) and `${{ runner.temp }}` in a job-level `env:` block, where the `runner` context is not available. Fixed by quoting both names and moving `DOCMIND_MODEL_CACHE_DIR` to step-level `env:` on the two steps that use the model cache. actionlint then exits 0.
+- Verification: actionlint 1.7.7 exit 0; `grep -n "<pinned" .github/workflows/ci.yml` finds nothing; `pip-audit -r requirements.lock --no-deps --disable-pip` prints "No known vulnerabilities found" (exit 0).
+
+### Note: network conditions during M4 (R5) and the mirrors used
+- Docker Hub registry was unreachable at the start of M4 (`registry-1.docker.io` timed out), so `python:3.12-slim-bookworm` was first pulled through two independent mirrors (`docker.m.daocloud.io`, `docker.1ms.run`), which returned the same multi-arch digest `sha256:e697c81897302a4c4333bade000d98038fbb21eb064f8ee1fd42d02ebcd9d337`; the local tag was then created from that content. Later in the same session a direct `docker pull` succeeded and confirmed the same digest; the canonical RepoDigest `python@sha256:e697…` is the one recorded above.
+- The first Docker build failed at the model download step (Hugging Face unreachable, R5). Per section 13.1 the build was retried with `--build-arg HF_ENDPOINT=https://hf-mirror.com` for that build only (nothing committed), which produced the first working image. After the network recovered, a plain `docker build -t docmind-service:local .` (no build argument) succeeded in 63.4 s and is the image measured and shipped; the mirror is therefore not needed in the committed build path.
+- The `# syntax=docker/dockerfile:1` frontend line was removed from the Dockerfile: that frontend image resolves through Docker Hub at build time and the build failed while the registry was unreachable; no dockerfile-1.x feature is used. `FROM python:3.12-slim-bookworm` is pinned by tag and by the recorded digest.
+- The pinned actionlint 1.7.7 binary was downloaded through WSL (`curl` in Ubuntu) because the Windows HTTP client could not reach the GitHub release CDN at that moment; the zip was verified against the official SHA-256 (`7f12f180…`) before extraction.
+- Lesson: retry direct registries before recording a mirror as required; check both mirrors' digests when a mirror is unavoidable.
