@@ -76,4 +76,4 @@ def test_matches_p6_chunk_text_on_the_same_word_stream():
         check=True,
         timeout=120,
     )
-    assert [c.text for c in chunk_pages([text])] == json.loads(result.stdout)
+    assert [c.text for c in chunk_pages([text], words=150, overlap=25)] == json.loads(result.stdout)

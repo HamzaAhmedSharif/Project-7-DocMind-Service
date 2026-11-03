@@ -1,7 +1,7 @@
 import re
 from dataclasses import dataclass
 
-CHUNK_WORDS = 150
+CHUNK_WORDS = 800
 CHUNK_OVERLAP = 25
 _WS = re.compile(r"\s+")
 
