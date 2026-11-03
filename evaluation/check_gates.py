@@ -32,6 +32,7 @@ def main(argv: list[str] | None = None) -> int:
     parser.add_argument("--results", required=True)
     parser.add_argument("--stage", required=True)
     parser.add_argument("--gates", default=str(Path(__file__).with_name("gates.json")))
+    parser.add_argument("--markdown-out", default=None)
     args = parser.parse_args(argv)
     gates_doc = json.loads(Path(args.gates).read_text(encoding="utf-8"))
     results = json.loads(Path(args.results).read_text(encoding="utf-8"))
@@ -64,6 +65,9 @@ def main(argv: list[str] | None = None) -> int:
     lines += [f"| {row[0]} | {row[1]} | {row[2]} | {row[3]} | {row[4]} |" for row in rows]
     table = "\n".join(lines)
     print(table)
+    if args.markdown_out:
+        out = Path(args.markdown_out)
+        out.write_text(table + "\n", encoding="utf-8")
     summary = os.environ.get("GITHUB_STEP_SUMMARY")
     if summary:
         with Path(summary).open("a", encoding="utf-8") as handle:

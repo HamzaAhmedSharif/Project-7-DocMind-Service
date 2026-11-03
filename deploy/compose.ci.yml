@@ -1,0 +1,24 @@
+services:
+  db:
+    image: pgvector/pgvector:pg17
+    environment:
+      POSTGRES_PASSWORD: postgres
+      POSTGRES_DB: docmind
+    healthcheck:
+      test: ["CMD-SHELL", "pg_isready -U postgres -d docmind"]
+      interval: 3s
+      timeout: 3s
+      retries: 20
+  app:
+    build: ..
+    image: docmind-service:ci
+    environment:
+      DOCMIND_DATABASE_URL: postgresql://postgres:postgres@db:5432/docmind
+      DOCMIND_AUTO_MIGRATE: "true"
+      DOCMIND_LLM_PROVIDER: fake
+      DOCMIND_ENVIRONMENT: test
+    depends_on:
+      db:
+        condition: service_healthy
+    ports:
+      - "127.0.0.1:8000:8000"

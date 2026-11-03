@@ -1,0 +1,15 @@
+{
+  "image": "docmind-service:local",
+  "image_size_bytes": 987185947,
+  "build_seconds": 63.4,
+  "startup_seconds": 6.7,
+  "idle_mb": 202.4,
+  "mb_after_100_queries": 202.1,
+  "queries": {
+    "sent": 100,
+    "explained": 100
+  },
+  "smoke_exit": 0,
+  "oom_killed": "false",
+  "container_limit_mb": 512
+}

@@ -1,0 +1,9 @@
+# Local dev database, identical settings to the `docker run` of M3.0.
+services:
+  db:
+    image: pgvector/pgvector:pg17
+    environment:
+      POSTGRES_HOST_AUTH_METHOD: trust
+      POSTGRES_DB: docmind
+    ports:
+      - "127.0.0.1:5433:5432"

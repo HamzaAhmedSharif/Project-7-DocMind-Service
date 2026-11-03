@@ -1,0 +1,14 @@
+.git
+.github
+reports
+data
+tests
+evaluation
+docs
+deploy
+scripts
+*.md
+.env*
+__pycache__
+.ruff_cache
+.venv

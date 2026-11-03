@@ -12,6 +12,7 @@ import numpy as np
 from pypdf import __version__ as pypdf_version
 
 from docmind_service.chunking import chunk_pages
+from docmind_service.config import get_settings
 from docmind_service.db import make_pool, migrate
 from docmind_service.embedding import OnnxEmbedder
 from docmind_service.ingest import extract_pages
@@ -78,6 +79,7 @@ def main(argv: list[str] | None = None) -> int:
         raise SystemExit("DOCMIND_TEST_DATABASE_URL is not set")
     if not dsn.rsplit("/", 1)[-1].split("?", 1)[0].endswith("_test"):
         raise SystemExit("DOCMIND_TEST_DATABASE_URL must name a database ending in _test")
+    top_k = get_settings().default_top_k
 
     manifest = json.loads(MANIFEST.read_text(encoding="utf-8"))
     corpus = manifest["corpora"][0]
@@ -129,7 +131,7 @@ def main(argv: list[str] | None = None) -> int:
                 question["question"],
                 tenant_id="eval",
                 document_ids=None,
-                top_k=10,
+                top_k=top_k,
             )
             ordinals = [int(hit.chunk_id.rsplit(":", 1)[1]) for hit in hits]
             e2[question["id"]] = len(set(ordinals) & set(top10[question["id"]])) / 10
@@ -151,7 +153,7 @@ def main(argv: list[str] | None = None) -> int:
                     question["question"],
                     tenant_id="eval",
                     document_ids=None,
-                    top_k=10,
+                    top_k=top_k,
                 )
                 latencies.append(time.perf_counter() - started)
         latency = {
@@ -166,6 +168,7 @@ def main(argv: list[str] | None = None) -> int:
             "generated_at": datetime.now(UTC).isoformat(),
             "corpus": corpus,
             "n_chunks": len(chunks),
+            "top_k": top_k,
             "prepare_seconds": prepare_seconds,
             "ingest_seconds": ingest_seconds,
             "e1": {
