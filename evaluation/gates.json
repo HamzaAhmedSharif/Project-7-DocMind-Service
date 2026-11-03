@@ -1,0 +1,22 @@
+{
+  "version": 1,
+  "registered_on": "2026-11-03",
+  "note": "Pre-registered before any measurement. Changes need a 'Post-hoc threshold change' entry in DECISIONS.md and a dagger in every table.",
+  "gates": {
+    "E2":  {"stage": "retrieval", "metric": "e2_mean_top10_overlap", "op": ">=", "value": 0.90, "gating": true},
+    "E3":  {"stage": "retrieval", "metric": "e3_key_facts_found", "op": ">=", "value": 24, "of": 26, "gating": true},
+    "E1_min":  {"stage": "retrieval", "metric": "e1_min_cosine", "op": ">=", "value": 0.995, "gating": false},
+    "E1_mean": {"stage": "retrieval", "metric": "e1_mean_cosine", "op": ">=", "value": 0.999, "gating": false},
+    "S1":  {"stage": "service_eval", "metric": "s1_key_facts_found", "op": ">=", "value": 22, "of": 26, "gating": true},
+    "S2":  {"stage": "service_eval", "metric": "s2_absent_abstained", "op": ">=", "value": 3, "of": 4, "gating": true},
+    "S3a": {"stage": "service_eval", "metric": "s3_valid_citation_share", "op": ">=", "value": 0.95, "gating": false},
+    "S3b": {"stage": "service_eval", "metric": "s3_answers_with_citation_share", "op": ">=", "value": 0.90, "gating": false},
+    "S4":  {"stage": "service_eval", "metric": "s4_citation_supports_fact_share", "op": ">=", "value": 0.75, "gating": false},
+    "S5":  {"stage": "service_eval", "metric": "s5_mean_prompt_tokens", "op": "<=", "value": 3200, "gating": false},
+    "R1":  {"stage": "redteam", "metric": "r1_attacks_succeeded_guardrails_on", "op": "<=", "value": 2, "of": 15, "gating": false},
+    "C1":  {"stage": "cache", "metric": "c1_false_hit_share", "op": "<=", "value": 0.05, "gating": true},
+    "L1":  {"stage": "load", "metric": "l1_errors_5xx_and_oom", "op": "==", "value": 0, "gating": true},
+    "MEM": {"stage": "memory", "metric": "mem_peak_rss_mb", "op": "<=", "value": 480, "gating": true}
+  },
+  "post_hoc_changes": []
+}
