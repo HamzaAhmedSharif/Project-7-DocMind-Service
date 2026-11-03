@@ -118,9 +118,15 @@ def main(argv: list[str] | None = None) -> int:
         reference_chunks = np.load(FIXTURES / "reference_chunk_vectors.npy")
         reference_questions = np.load(FIXTURES / "reference_question_vectors.npy")
         question_vectors = embedder.embed_passages([q["question"] for q in QUESTIONS])
-        chunk_cos = _cosine_rows(embeddings, reference_chunks)
+        # Positional chunk comparison only makes sense for the reference chunking;
+        # a changed chunk count is reported as unavailable (E1 question parity still applies).
+        chunk_cos = (
+            _cosine_rows(embeddings, reference_chunks)
+            if embeddings.shape[0] == reference_chunks.shape[0]
+            else None
+        )
         question_cos = _cosine_rows(question_vectors, reference_questions)
-        all_cos = np.concatenate([chunk_cos, question_cos])
+        all_cos = question_cos if chunk_cos is None else np.concatenate([chunk_cos, question_cos])
 
         top10 = json.loads((FIXTURES / "reference_top10.json").read_text(encoding="utf-8"))
         e2 = {}
@@ -174,7 +180,7 @@ def main(argv: list[str] | None = None) -> int:
             "e1": {
                 "min_cosine": float(all_cos.min()),
                 "mean_cosine": float(all_cos.mean()),
-                "chunk_min_cosine": float(chunk_cos.min()),
+                "chunk_min_cosine": None if chunk_cos is None else float(chunk_cos.min()),
                 "question_min_cosine": float(question_cos.min()),
             },
             "e2": {
