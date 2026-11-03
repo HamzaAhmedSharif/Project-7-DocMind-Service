@@ -165,6 +165,7 @@ Notes are recorded in the milestone sections below.
 - Fix: `registered_on` is `2026-11-03`; `post_hoc_changes` is empty; the E3 post-hoc entry is in `DECISIONS.md` only.
 - Evidence: `git log --format="%h %ad %s" --date=short -- evaluation/gates.json evaluation/results/retrieval-m3.json` shows gates before results.
 - Lesson: pre-registration prevents threshold tuning after seeing results.
+- Timeline correction (2026-11-03): the gates FILE existed and was frozen in the working tree before the evaluation ran, but its standalone commit `4374a00` was created after the run (HEAD during the run was `af79b1d`). See "Note: why evaluation/results/retrieval-m3.json stamps git_commit af79b1d".
 
 ### Post-hoc threshold change: E3
 - Gate and original threshold: E3, `e3_key_facts_found >= 24` of 26 (gating).
@@ -175,4 +176,20 @@ Notes are recorded in the milestone sections below.
   3. E2 top-10 overlap vs FAISS reference: 1.000 mean (PASS — retrieval matches P6 exactly).
 - New threshold and the rule that sets it: threshold stays at 24/26; no change. The miss is inherent to the question set: the d02 softmax/scaling key facts and one d09 fact are not in the top-10 chunks retrieved by the same method P6 uses. Marked with † in `reports/M3.md`.
 - Would revisit if: M8 changes the question set, chunking, or top-K.
+
+### Post-hoc threshold change: E3 — completed
+- Status: supersedes the "no change" entry above; that entry is left as written for the record.
+- Decision: Hamza's Class C decision of 2026-11-03, communicated via the manager, completes the E3 post-hoc change. `evaluation/gates.json` now sets `E3.value = 23` (of 26) and records the change in `post_hoc_changes` (old_value 24, new_value 23, measured "23/26 in evaluation/results/retrieval-m3.json", date 2026-11-03).
+- Measured value: 23/26, unchanged, in `evaluation/results/retrieval-m3.json`.
+- The three attempts (full detail in the superseded entry): (1) chunk count vs P6: 49 = 49, PASS, with Manager FIX-1 proving the cause is extraction-text whitespace (pypdf 6.x token spacing vs P6's pypdf 5.0.1 shifted the d02 scaling sentence across the chunk 10/11 boundary); (2) E1 cosine 1.0 min / 1.0 mean, PASS; (3) E2 top-10 overlap 1.000, PASS.
+- FIX-1 finding: both d02 fact strings exist verbatim in P7's chunk text in scorer-matchable form, but the chunks holding them are outside d02's top-10; the retrieved chunk 10 is cut at the 150/25 boundary exactly before "√dk". Retrieval parity (E2 = 1.000, E1 mean = 1.0) rules out a retrieval or embedding defect; the one-fact difference is the extraction-text boundary placement, not a lost fact.
+- New threshold and the rule that sets it: `e3_key_facts_found >= 23` of 26 (gating). The measured 23/26 now passes; `evaluation/check_gates.py --stage retrieval` reports PASS. Dagger † appended to every E3 gate row/statement in `reports/M3.md`.
+- Would revisit if: M8 changes the question set, chunking, pypdf version, or top-K.
+
+### Note: why evaluation/results/retrieval-m3.json stamps git_commit af79b1d
+- Symptom: the results file records `"git_commit": "af79b1dfeaa9add11693efe174ef090b8b6f4f88"`, a commit that predates every M3 commit.
+- True sequence, exactly as it happened: (1) all M3 changes were present and uncommitted in the working tree while HEAD was still `af79b1d` (the P0 commit); (2) the retrieval evaluation ran in that state, and the script stamps the current HEAD, so the result records `af79b1d`; (3) only afterwards were the commits created: M3a `32b60cb`, M3b `576b7b9`, `eval: pre-register gates` `4374a00` (gates.json existed in the worktree, unchanged, before the run), M3c `1538e20` (which committed the results file), then FIX-1 `92f081c`.
+- Cause: the stamp identifies the commit checked out at run time, not the content of the working tree; uncommitted changes are invisible to `git rev-parse HEAD`.
+- Fix: none needed for the results (the working-tree content that ran is exactly what M3a–M3c commit); this note records the chronology. The earlier "gates pre-registered before results" note is corrected in the timeline respect: the gates FILE existed and was frozen before the run, while its standalone COMMIT came after the run.
+- Lesson: when a run must be attributed to code, commit first and run from the commit; a dirty-tree stamp is only a lower bound.
 
