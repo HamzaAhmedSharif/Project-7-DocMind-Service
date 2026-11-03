@@ -3,3 +3,10 @@ uvicorn[standard]==0.54.0
 pydantic==2.14.1
 pydantic-settings==2.16.2
 python-multipart==0.0.32
+psycopg[binary]==3.3.7
+psycopg-pool==3.3.3
+pgvector==0.5.1
+numpy==2.5.4
+fastembed==0.9.1
+pypdf==6.21.4
+openai==3.42.1
