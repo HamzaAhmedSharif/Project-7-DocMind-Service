@@ -8,3 +8,8 @@ select = ["E", "F", "I", "UP", "B"]
 [tool.pytest.ini_options]
 testpaths = ["tests"]
 pythonpath = ["."]
+addopts = "-p no:cacheprovider --strict-markers -m 'not integration and not model'"
+markers = [
+  "integration: needs a Postgres+pgvector database (DOCMIND_TEST_DATABASE_URL)",
+  "model: needs the ONNX embedding model files (downloads on first use)",
+]

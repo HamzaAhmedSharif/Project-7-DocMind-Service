@@ -78,3 +78,18 @@ Notes are recorded in the milestone sections below.
 - Cause: the test client is moving to a different HTTP library.
 - Fix: `requirements-dev.txt` now pins httpx2 2.16.0 in place of httpx; the full suite passes with only httpx2 installed and the warning is gone.
 - Lesson: read the warnings of a green run; the next dependency upgrade would have turned this one into a failure.
+
+## P0 - CI carry-over chores (2026-11-03)
+
+### Decision: run the pinned actionlint binary directly when Docker is unavailable
+- Context: P0.5 step 3 calls `docker run --rm -v "${PWD}:/repo" -w /repo rhysd/actionlint:1.7.7`, but `docker info` fails because the Docker Desktop daemon is not running. Starting it requires Hamza ([H2]), and the rest of P0 can continue.
+- Chosen: download the official actionlint 1.7.7 Windows amd64 release, confirm its SHA-256 against the published checksums file, and run it directly on `.github/workflows/ci.yml`. Evidence: computed SHA-256 `7f12f1801bca3d480d67aaf7774f4c2a6359a3ca8eebe382c95c10c9704aa731` matched the checksums line; actionlint printed no findings and exited 0 on 2026-11-03.
+- Rejected: skipping the workflow lint; using an unpinned `latest` tag; waiting for Docker and blocking independent P0 steps.
+- Tradeoff accepted: the check ran as a local pinned binary instead of inside the container; the workflow file and actionlint version are the same.
+- Would revisit if: Docker Desktop is started; rerun the container command for an exact match.
+
+### Note: gitleaks-action fails on a root-commit push
+- Symptom: the first CI run on `main` passed lint and test but failed the secrets job at `Run gitleaks/gitleaks-action@v2`; no leak was reported.
+- Cause: `gitleaks-action` computes the range `<oldest>^..<newest>` from the push event. For a push whose range starts at the root commit, that parent does not exist; git fails with an unknown revision, gitleaks scans nothing, and exits 1.
+- Fix: replaced the action with the pinned gitleaks 8.24.3 Linux binary downloaded from the release page, verified with the published SHA-256 `9991e0b2903da4c8f6122b5c3186448b927a5da4deef1fe45271c3793f4ee29c`, then run as `gitleaks git --no-banner --redact --verbose .` over the full checkout. Evidence: checksum matched; actionlint 1.7.7 found no workflow errors. CI result is pending Hamza's push ([H1]).
+- Lesson: a check that fails for its own reasons erodes trust in the green one.
