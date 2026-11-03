@@ -1,0 +1,30 @@
+{
+ "sentence_transformers": "3.2.1",
+ "faiss": "1.9.0",
+ "n_chunks": 49,
+ "chunk_words": 150,
+ "chunk_overlap": 25,
+ "question_ids": [
+  "d01",
+  "d02",
+  "d03",
+  "d04",
+  "d05",
+  "d06",
+  "d07",
+  "d08",
+  "d09",
+  "d10",
+  "d11",
+  "d12",
+  "w01",
+  "w02",
+  "w03",
+  "w04",
+  "a01",
+  "a02",
+  "a03",
+  "a04"
+ ],
+ "corpus_sha256": "bdfaa68d8984f0dc02beaca527b76f207d99b666d31d1da728ee0728182df697"
+}

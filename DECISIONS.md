@@ -93,3 +93,86 @@ Notes are recorded in the milestone sections below.
 - Cause: `gitleaks-action` computes the range `<oldest>^..<newest>` from the push event. For a push whose range starts at the root commit, that parent does not exist; git fails with an unknown revision, gitleaks scans nothing, and exits 1.
 - Fix: replaced the action with the pinned gitleaks 8.24.3 Linux binary downloaded from the release page, verified with the published SHA-256 `9991e0b2903da4c8f6122b5c3186448b927a5da4deef1fe45271c3793f4ee29c`, then run as `gitleaks git --no-banner --redact --verbose .` over the full checkout. Evidence: checksum matched; actionlint 1.7.7 found no workflow errors. CI result is pending Hamza's push ([H1]).
 - Lesson: a check that fails for its own reasons erodes trust in the green one.
+
+## M3 - Document storage, retrieval, and evaluation pre-registration (2026-11-03)
+
+### Decision: global word-stream chunking with first-word page attribution and parity with P6
+- Context: M3.3 needs a chunker that matches Project 6's `chunk_text(text, chunk_size, overlap)` so retrieval evaluation can compare P7 against P6 references.
+- Chosen: `docmind_service/chunking.py` with `chunk_pages(pages, words=150, overlap=25)` that normalizes whitespace, joins pages into a word stream, attributes each chunk to the page of its first word, and passes a P6 parity test (`tests/test_chunking.py::test_matches_p6_chunk_text_on_the_same_word_stream`, skips when P6 is absent). Evidence: 401-word stream matches P6 exactly; `CHUNK_WORDS=150`, `CHUNK_OVERLAP=25` per the script.
+- Rejected: per-page chunking with independent windows (would not match P6's cross-page word stream); different chunk sizes (the script fixes 150/25).
+- Tradeoff accepted: a chunk can span a page boundary; its `page` is the page of its first word, which is an approximation for multi-page chunks.
+- Would revisit if: P6's chunker changes or M8 needs finer page attribution.
+
+### Decision: exact cosine search, no ANN index, `tsv` column kept hybrid-ready
+- Context: M3.5 needs vector search in PostgreSQL with pgvector. HNSW/ANN was considered but adds build time and approximation error.
+- Chosen: `migrations/001_init.sql` creates `chunks.embedding vector(384)` with exact `<=>` cosine distance ordering and no index; `chunks.tsv` is a generated `tsvector` column for future hybrid search. Evidence: `tests/test_db.py` passes against `docmind_test`; `scripts/measure_rss.py` shows ~162 MB peak RSS.
+- Rejected: HNSW index (`vector_cosine_ops`) — would speed up large corpora but add approximate results and build overhead; ORM (SQLAlchemy) — plain SQL with psycopg is simpler and matches the script's "plain-SQL migrations" requirement.
+- Tradeoff accepted: exact search is O(n) per query; fine for the evaluation corpus (49 chunks) and expected scale; hybrid search deferred to a later milestone.
+- Would revisit if: document counts grow beyond thousands.
+
+### Decision: plain-SQL migrations, no ORM
+- Context: M3.5 needs schema migration and a migration CLI.
+- Chosen: `docmind_service/db.py` with `migrate()`, `make_pool()`, `load_dotenv()`, and a `python -m docmind_service.db migrate|status` CLI; `migrations/001_init.sql` is plain SQL with `CREATE EXTENSION IF NOT EXISTS vector`, `CREATE TABLE ...`, and indexes; an advisory lock (727001) serializes concurrent migrations; each missing version runs in its own transaction.
+- Rejected: Alembic/SQLAlchemy migrations — adds a dependency and abstraction not requested; embedding migration SQL in Python strings — harder to review and version.
+- Tradeoff accepted: SQL files are separate from code; the CLI needs `--env-file` support and reads `DOCMIND_DATABASE_URL_DIRECT` or `DOCMIND_DATABASE_URL`.
+- Would revisit if: multi-branch migration conflicts become common.
+
+### Decision: fastembed ONNX embedder with model files baked into the image and a unit-norm check
+- Context: M3.4 needs sentence embeddings; PyTorch/sentence-transformers would exceed the 512 MB memory budget.
+- Chosen: `docmind_service/embedding.py` with `OnnxEmbedder` wrapping `fastembed.TextEmbedding("sentence-transformers/all-MiniLM-L6-v2")`, `dim=384`, unit-norm verification (corrects if needed), a 256-entry LRU query cache, and `warm_up()`/`clear_cache()`. `HashingEmbedder` is a deterministic dependency-free double for tests. Evidence: `tests/test_embedding.py` passes (unit HashingEmbedder without the model; model tests download and verify dim/norm/determinism).
+- Rejected: sentence-transformers/PyTorch — too large for the 512 MB Render free tier; OpenAI embeddings — costs tokens and needs a key.
+- Tradeoff accepted: the model downloads on first use (~6 min); the Dockerfile bakes it in at build time.
+- Would revisit if: a different embedding model is required by M8 results.
+
+### Decision: `tenant_id` from day one and the interface change
+- Context: M3.2 adds `tenant_id` to `Retriever`, `DocumentStore`, `query.py`, and `main.py` while keeping `"public"` as the default for current single-tenant callers.
+- Chosen: all retriever/store calls accept `tenant_id` (default `"public"`); `PgStore` filters `chunks.tenant_id`; upload/list/delete hardcode `tenant_id="public"`; `fakes.py` and tests updated for the new signature.
+- Rejected: making `tenant_id` required everywhere (would break M2 callers); a separate multi-tenant middleware (over-engineering for single-tenant).
+- Tradeoff accepted: existing single-tenant callers work unchanged; multi-tenant is ready when M6 adds auth.
+- Would revisit if: M6's auth model requires tenant extraction from JWTs.
+
+### Decision: the `_test` database guard
+- Context: M3.8's retrieval evaluation ingests into `DOCMIND_TEST_DATABASE_URL`; an accidental run against the production `docmind` database would be destructive.
+- Chosen: integration fixtures refuse a DSN whose database name does not end in `_test`; `fetch_corpus.py` and `run_retrieval.py` also validate the `_test` suffix.
+- Rejected: relying on developer carelessness; a runtime confirmation prompt (not CI-friendly).
+- Tradeoff accepted: the guard is in test code, not production; production code does not need it.
+- Would revisit if: a staging database is added.
+
+### Decision: provider throttling and shed policy
+- Context: M3.7's `HostedLLM` must respect RPM/TPM limits and shed load instead of unbounded waiting.
+- Chosen: `TokenBucket` at 90% of `HOSTED_RPM`/`HOSTED_TPM`; estimated tokens `len(prompt)//3 + 600`; if `wait > LLM_MAX_WAIT_SECONDS`, refund and raise `ProviderError(retry_after=ceil(wait))` (load shedding, no provider call); 429 retries at most twice with `min(delay, 20) + 0.5`; daily limits fail fast; 413 → `ProviderError("request too large")`; connection errors retry once after 1 s then fail with `retry_after=30`.
+- Rejected: unbounded retries (could exhaust the token budget); retrying 413/401/403 (client errors, not transient).
+- Tradeoff accepted: a shed request returns 503 to the caller; the token budget is preserved.
+- Would revisit if: M8's load test shows shedding too aggressive.
+
+### Note: reference fixtures contain vectors only (license)
+- Symptom: the evaluation corpus PDF is under an arXiv non-exclusive license and must not be committed.
+- Cause: `evaluation/fixtures/` contains `.npy` vector files and `.json` metadata only (~110 KB), no text and no PDF.
+- Fix: `scripts/fetch_corpus.py` downloads the PDF by hash to `data/cache/` (git-ignored) at evaluation time; fixtures are derived from the P7-chunked text, not copied from the PDF.
+- Evidence: `.gitignore` covers `data/`; `evaluation/fixtures/` holds only `.npy`/`.json`.
+- Lesson: never commit licensed full-text; vectors are derivable and safe to commit.
+
+### Note: corpus fetched by hash, never committed
+- Symptom: `evaluation/corpus.json` pins arXiv `1706.03762v7` with SHA-256 `bdfaa68d...` (matches P6's copy exactly).
+- Cause: the PDF is downloaded at evaluation time and verified against the manifest hash; `data/cache/` is git-ignored.
+- Fix: `scripts/fetch_corpus.py` retries 3 times (2/5/10 s), verifies SHA-256, skips if cached and matches, exits non-zero on failure.
+- Evidence: `data/cache/attention.pdf` exists locally but is not tracked by git.
+- Lesson: hash verification prevents silent drift if arXiv replaces a versioned file.
+
+### Note: gates pre-registered before results
+- Symptom: `evaluation/gates.json` must exist before any evaluation runs.
+- Cause: `evaluation/gates.json` was committed as a standalone `eval: pre-register gates` commit before `evaluation/results/retrieval-m3.json` was produced.
+- Fix: `registered_on` is `2026-11-03`; `post_hoc_changes` is empty; the E3 post-hoc entry is in `DECISIONS.md` only.
+- Evidence: `git log --format="%h %ad %s" --date=short -- evaluation/gates.json evaluation/results/retrieval-m3.json` shows gates before results.
+- Lesson: pre-registration prevents threshold tuning after seeing results.
+
+### Post-hoc threshold change: E3
+- Gate and original threshold: E3, `e3_key_facts_found >= 24` of 26 (gating).
+- Measured value (source file, commit): 23/26 in `evaluation/results/retrieval-m3.json`.
+- Fix attempts (three, each a different hypothesis, each with its result):
+  1. Chunk count vs P6: 49 chunks, matches P6 exactly (PASS — not the cause).
+  2. E1 cosine vs reference vectors: 1.0 min / 1.0 mean (PASS — embedding parity confirmed).
+  3. E2 top-10 overlap vs FAISS reference: 1.000 mean (PASS — retrieval matches P6 exactly).
+- New threshold and the rule that sets it: threshold stays at 24/26; no change. The miss is inherent to the question set: the d02 softmax/scaling key facts and one d09 fact are not in the top-10 chunks retrieved by the same method P6 uses. Marked with † in `reports/M3.md`.
+- Would revisit if: M8 changes the question set, chunking, or top-K.
+

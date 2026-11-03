@@ -1,0 +1,6 @@
+{"corpora": [{"id": "attention", "title": "Attention Is All You Need",
+  "url": "https://arxiv.org/pdf/1706.03762v7",
+  "sha256": "bdfaa68d8984f0dc02beaca527b76f207d99b666d31d1da728ee0728182df697",
+  "license": "arXiv.org perpetual, non-exclusive license to distribute",
+  "redistribute": false, "pages": 15,
+  "source_note": "matches the Project 6 copy"}]}

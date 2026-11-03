@@ -1,0 +1,89 @@
+{
+  "label": "m3-local",
+  "stage": "retrieval",
+  "generated_at": "2026-11-03T12:14:40.559697+00:00",
+  "corpus": {
+    "id": "attention",
+    "title": "Attention Is All You Need",
+    "url": "https://arxiv.org/pdf/1706.03762v7",
+    "sha256": "bdfaa68d8984f0dc02beaca527b76f207d99b666d31d1da728ee0728182df697",
+    "license": "arXiv.org perpetual, non-exclusive license to distribute",
+    "redistribute": false,
+    "pages": 15,
+    "source_note": "matches the Project 6 copy"
+  },
+  "n_chunks": 49,
+  "prepare_seconds": 1.3357210000103805,
+  "ingest_seconds": 4.025523999996949,
+  "e1": {
+    "min_cosine": 0.9999998807907104,
+    "mean_cosine": 1.0,
+    "chunk_min_cosine": 0.9999998807907104,
+    "question_min_cosine": 0.9999998807907104
+  },
+  "e2": {
+    "mean_top10_overlap": 1.0,
+    "per_question": {
+      "d01": 1.0,
+      "d02": 1.0,
+      "d03": 1.0,
+      "d04": 1.0,
+      "d05": 1.0,
+      "d06": 1.0,
+      "d07": 1.0,
+      "d08": 1.0,
+      "d09": 1.0,
+      "d10": 1.0,
+      "d11": 1.0,
+      "d12": 1.0,
+      "w01": 1.0,
+      "w02": 1.0,
+      "w03": 1.0,
+      "w04": 1.0,
+      "a01": 1.0,
+      "a02": 1.0,
+      "a03": 1.0,
+      "a04": 1.0
+    }
+  },
+  "e3": {
+    "found": 23,
+    "total": 26,
+    "missed": [
+      {
+        "id": "d02",
+        "fact": "softmax over the scaled dot products"
+      },
+      {
+        "id": "d02",
+        "fact": "scaling by the square root of the key dimension"
+      },
+      {
+        "id": "d09",
+        "fact": "label smoothing"
+      }
+    ]
+  },
+  "latency": {
+    "samples": 100,
+    "p50_seconds": 0.011914650007383898,
+    "p95_seconds": 0.017213225006707945
+  },
+  "metadata": {
+    "python": "3.12.14",
+    "fastembed": "0.9.1",
+    "onnxruntime": "1.31.1",
+    "pypdf": "6.21.4",
+    "psycopg": "3.3.7",
+    "pgvector": "0.8.7",
+    "postgres": "17.11 (Debian 17.11-1.pgdg12+2)",
+    "git_commit": "af79b1dfeaa9add11693efe174ef090b8b6f4f88",
+    "chunks_table_bytes": 368640
+  },
+  "metrics": {
+    "e1_min_cosine": 0.9999998807907104,
+    "e1_mean_cosine": 1.0,
+    "e2_mean_top10_overlap": 1.0,
+    "e3_key_facts_found": 23
+  }
+}
