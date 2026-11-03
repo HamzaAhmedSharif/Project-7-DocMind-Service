@@ -1,0 +1,7 @@
+# Synthetic unique-string values used by the secret-leak tests; any other finding still blocks.
+# The .env.example entry is a gitleaks generic-api-key artifact: the placeholder value is
+# empty, and the rule captures the NEXT line's variable name across the newline (#L14-L15).
+576b7b92e545e9a7ccd1d51ea6cd1ee913a9971d:tests/test_config.py:generic-api-key:28
+576b7b92e545e9a7ccd1d51ea6cd1ee913a9971d:tests/test_config.py:generic-api-key:31
+576b7b92e545e9a7ccd1d51ea6cd1ee913a9971d:tests/test_llm.py:generic-api-key:195
+576b7b92e545e9a7ccd1d51ea6cd1ee913a9971d:.env.example:generic-api-key:14
