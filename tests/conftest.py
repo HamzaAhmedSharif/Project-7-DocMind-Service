@@ -27,8 +27,21 @@ def log_records():
 
 @pytest.fixture
 def make_client():
-    def factory(llm=None, retriever=None, raise_server_exceptions=True):
-        app = create_app(settings=Settings(_env_file=None), retriever=retriever, llm=llm)
+    def factory(
+        llm=None,
+        retriever=None,
+        store=None,
+        embedder=None,
+        settings=None,
+        raise_server_exceptions=True,
+    ):
+        app = create_app(
+            settings=settings or Settings(_env_file=None),
+            retriever=retriever,
+            llm=llm,
+            store=store,
+            embedder=embedder,
+        )
         return TestClient(app, raise_server_exceptions=raise_server_exceptions)
 
     return factory

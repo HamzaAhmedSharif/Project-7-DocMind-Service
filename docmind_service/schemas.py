@@ -18,6 +18,8 @@ class Problem(BaseModel):
 
 class HealthOut(BaseModel):
     status: Literal["ok"] = "ok"
+    version: str
+    commit: str | None = None
 
 
 class ReadyOut(BaseModel):

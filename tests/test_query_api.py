@@ -11,7 +11,7 @@ class BrokenRetriever:
     def __init__(self, error):
         self.error = error
 
-    def retrieve(self, question, *, document_ids, top_k):
+    def retrieve(self, question, *, tenant_id="public", document_ids, top_k):
         raise self.error
 
 
@@ -21,7 +21,7 @@ class FalsyRetriever:
     def __bool__(self):
         return False
 
-    def retrieve(self, question, *, document_ids, top_k):
+    def retrieve(self, question, *, tenant_id="public", document_ids, top_k):
         return []
 
 

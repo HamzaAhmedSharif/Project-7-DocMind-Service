@@ -62,12 +62,15 @@ def parse_citations(
 def answer_question(
     question: str,
     *,
+    tenant_id: str = "public",
     retriever: Retriever,
     llm: LLMClient,
     document_ids: list[UUID] | None,
     top_k: int,
 ) -> QueryResult:
-    chunks = retriever.retrieve(question, document_ids=document_ids, top_k=top_k)
+    chunks = retriever.retrieve(
+        question, tenant_id=tenant_id, document_ids=document_ids, top_k=top_k
+    )
     if not chunks:
         return QueryResult(NO_EVIDENCE_ANSWER, [], True, "no_evidence", None, 0, 0)
     prompt, mapping = build_prompt(question, chunks)

@@ -18,6 +18,7 @@ TITLES = {
     403: "Forbidden",
     404: "Not Found",
     405: "Method Not Allowed",
+    411: "Length Required",
     413: "Payload Too Large",
     422: "Unprocessable Content",
     429: "Too Many Requests",
@@ -71,8 +72,9 @@ async def validation_exception_handler(
 
 
 async def provider_error_handler(request: Request, exc: ProviderError) -> JSONResponse:
+    retry_after = min(max(exc.retry_after or 30, 1), 300)
     detail = "The language model provider is unavailable."
-    return problem_response(503, detail, headers={"Retry-After": "30"})
+    return problem_response(503, detail, headers={"Retry-After": str(retry_after)})
 
 
 async def retrieval_error_handler(request: Request, exc: RetrievalError) -> JSONResponse:

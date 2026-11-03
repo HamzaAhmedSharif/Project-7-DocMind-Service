@@ -1,18 +1,24 @@
 import logging
 import time
+from contextlib import asynccontextmanager
 from typing import Annotated
 from uuid import UUID
 
+import numpy as np
 from fastapi import APIRouter, Depends, FastAPI, File, Request, UploadFile
 from fastapi.exceptions import RequestValidationError
-from fastapi.responses import JSONResponse, PlainTextResponse
+from fastapi.responses import JSONResponse, PlainTextResponse, Response
 from fastapi.security import APIKeyHeader
 from starlette.exceptions import HTTPException as StarletteHTTPException
 
 from docmind_service import __version__
 from docmind_service.config import Settings, get_settings
+from docmind_service.db import make_pool, migrate
 from docmind_service.domain import LLMClient, ProviderError, RetrievalError, Retriever
+from docmind_service.embedding import OnnxEmbedder
 from docmind_service.fakes import FakeLLM, InMemoryRetriever
+from docmind_service.ingest import IngestError, prepare_document
+from docmind_service.llm import HostedLLM
 from docmind_service.observability import configure_logging, request_context_middleware
 from docmind_service.problem import (
     error_responses,
@@ -34,16 +40,34 @@ from docmind_service.schemas import (
     ReadyOut,
     Usage,
 )
+from docmind_service.store import PgStore
 
 DESCRIPTION = (
     "Production-style RAG service over DocMind. Errors use application/problem+json (RFC 9457). "
     "API keys are declared in this contract and enforced from milestone M6."
 )
-NOT_IMPLEMENTED = "Not implemented yet: this route is part of the contract draft."
+BYTE_STEP = 1024 * 1024
+DEMO_DOCUMENTS = "Document storage needs DOCMIND_DATABASE_URL."
 
 query_logger = logging.getLogger("docmind.query")
+documents_logger = logging.getLogger("docmind.documents")
 api_key_header = APIKeyHeader(name="X-API-Key", auto_error=False)
 v1 = APIRouter(prefix="/v1", dependencies=[Depends(api_key_header)])
+
+
+def _document_out(record) -> DocumentOut:
+    return DocumentOut(
+        document_id=record.document_id,
+        sha256=record.sha256,
+        filename=record.filename,
+        pages=record.pages,
+        chunks=record.chunk_count,
+        created_at=record.created_at,
+    )
+
+
+def _dependency_problem(detail: str = "The document service is unavailable.") -> JSONResponse:
+    return problem_response(503, detail)
 
 
 @v1.post(
@@ -52,10 +76,68 @@ v1 = APIRouter(prefix="/v1", dependencies=[Depends(api_key_header)])
     response_model=DocumentOut,
     tags=["documents"],
     summary="Upload a PDF",
-    responses=error_responses(401, 413, 422, 429, 501, 503),
+    responses={
+        200: {"model": DocumentOut, "description": "Duplicate document; same sha256"},
+        **error_responses(401, 411, 413, 422, 429, 503),
+    },
 )
-async def upload_document(file: Annotated[UploadFile, File()]) -> JSONResponse:
-    return problem_response(501, NOT_IMPLEMENTED)
+def upload_document(file: Annotated[UploadFile, File()], request: Request) -> JSONResponse:
+    state = request.app.state
+    if state.demo:
+        return problem_response(501, DEMO_DOCUMENTS)
+    if state.store is None or state.embedder is None:
+        return _dependency_problem("The document store or embedder is not configured.")
+    max_bytes = state.settings.max_upload_mb * 1024 * 1024
+    length_value = request.headers.get("content-length")
+    if length_value is None:
+        return problem_response(411, "Content-Length is required.")
+    try:
+        content_length = int(length_value)
+    except ValueError:
+        return problem_response(422, "Content-Length is invalid.")
+    if content_length > max_bytes + BYTE_STEP:
+        return problem_response(413, f"Upload exceeds the {state.settings.max_upload_mb} MB limit.")
+    data = bytearray()
+    while True:
+        chunk = file.file.read(BYTE_STEP)
+        if not chunk:
+            break
+        data.extend(chunk)
+        if len(data) > max_bytes:
+            return problem_response(
+                413, f"Upload exceeds the {state.settings.max_upload_mb} MB limit."
+            )
+    try:
+        prepared = prepare_document(
+            bytes(data), file.filename or "upload.pdf", max_pages=state.settings.max_pages
+        )
+    except IngestError as exc:
+        return problem_response(422, str(exc))
+    try:
+        batch_vectors = [
+            state.embedder.embed_passages(
+                [chunk.text for chunk in prepared.chunks[start : start + 32]]
+            )
+            for start in range(0, len(prepared.chunks), 32)
+        ]
+        embeddings = (
+            np.vstack(batch_vectors) if batch_vectors else np.empty((0, state.embedder.dim))
+        )
+        record, created = state.store.add_document(
+            tenant_id="public",
+            sha256=prepared.sha256,
+            filename=file.filename or "upload.pdf",
+            pages=len(prepared.pages),
+            chunks=prepared.chunks,
+            embeddings=embeddings,
+        )
+    except Exception:
+        documents_logger.exception("document upload failed")
+        return _dependency_problem()
+    return JSONResponse(
+        status_code=201 if created else 200,
+        content=_document_out(record).model_dump(mode="json"),
+    )
 
 
 @v1.get(
@@ -65,19 +147,42 @@ async def upload_document(file: Annotated[UploadFile, File()]) -> JSONResponse:
     summary="List documents",
     responses=error_responses(401, 429, 501, 503),
 )
-async def list_documents() -> JSONResponse:
-    return problem_response(501, NOT_IMPLEMENTED)
+def list_documents(request: Request) -> DocumentList | JSONResponse:
+    state = request.app.state
+    if state.demo:
+        return problem_response(501, DEMO_DOCUMENTS)
+    if state.store is None:
+        return _dependency_problem("The document store is not configured.")
+    try:
+        records = state.store.list_documents(tenant_id="public")
+    except Exception:
+        documents_logger.exception("document list failed")
+        return _dependency_problem()
+    return DocumentList(items=[_document_out(record) for record in records])
 
 
 @v1.delete(
     "/documents/{document_id}",
     status_code=204,
+    response_model=None,
     tags=["documents"],
     summary="Delete a document and its chunks",
     responses=error_responses(401, 404, 422, 429, 501, 503),
 )
-async def delete_document(document_id: UUID) -> JSONResponse:
-    return problem_response(501, NOT_IMPLEMENTED)
+def delete_document(document_id: UUID, request: Request) -> Response | JSONResponse:
+    state = request.app.state
+    if state.demo:
+        return problem_response(501, DEMO_DOCUMENTS)
+    if state.store is None:
+        return _dependency_problem("The document store is not configured.")
+    try:
+        deleted = state.store.delete_document(tenant_id="public", document_id=document_id)
+    except Exception:
+        documents_logger.exception("document delete failed")
+        return _dependency_problem()
+    if not deleted:
+        return problem_response(404, "Document not found.")
+    return Response(status_code=204)
 
 
 @v1.post(
@@ -94,6 +199,7 @@ def query(body: QueryIn, request: Request) -> QueryOut | JSONResponse:
     started = time.perf_counter()
     result = answer_question(
         body.question,
+        tenant_id="public",
         retriever=state.retriever,
         llm=state.llm,
         document_ids=body.document_ids,
@@ -139,18 +245,64 @@ def create_app(
     settings: Settings | None = None,
     retriever: Retriever | None = None,
     llm: LLMClient | None = None,
+    store=None,
+    embedder=None,
 ) -> FastAPI:
     settings = settings if settings is not None else get_settings()
     configure_logging(settings.log_level)
+    dsn = settings.database_url_value
+    demo = store is None and not dsn
+    pool = None
+    if not demo and store is None:
+        pool = make_pool(dsn)
+        if embedder is None:
+            embedder = OnnxEmbedder(settings.embedding_model, cache_dir=settings.model_cache_dir)
+        store = PgStore(pool, embedder)
+    if retriever is None:
+        retriever = (
+            store if store is not None and hasattr(store, "retrieve") else InMemoryRetriever()
+        )
+    if llm is None:
+        llm = HostedLLM(settings) if settings.llm_provider == "hosted" else FakeLLM()
+    if isinstance(llm, FakeLLM) or settings.llm_provider == "fake":
+        provider_status = "fake"
+    elif settings.llm_provider == "hosted":
+        provider_status = "configured" if settings.llm_api_key_value else "not_configured"
+    else:
+        provider_status = "configured"
+
+    @asynccontextmanager
+    async def lifespan(_app: FastAPI):
+        try:
+            direct_dsn = settings.database_url_direct_value or settings.database_url_value
+            if settings.auto_migrate and direct_dsn:
+                migrate(direct_dsn)
+            if pool is not None:
+                pool.open(wait=True)
+            warm_up = getattr(embedder, "warm_up", None)
+            if warm_up is not None:
+                warm_up()
+            yield
+        finally:
+            if pool is not None:
+                pool.close()
+
     app = FastAPI(
         title="DocMind Service",
         version=__version__,
         description=DESCRIPTION,
         license_info={"name": "MIT"},
+        lifespan=lifespan,
     )
     app.state.settings = settings
-    app.state.retriever = retriever if retriever is not None else InMemoryRetriever()
-    app.state.llm = llm if llm is not None else FakeLLM()
+    app.state.demo = demo
+    app.state.pool = pool
+    app.state.store = store
+    app.state.embedder = embedder
+    app.state.retriever = retriever
+    app.state.llm = llm
+    app.state.provider_status = provider_status
+    app.state.git_sha = settings.commit_sha
     app.middleware("http")(request_context_middleware)
     app.add_exception_handler(StarletteHTTPException, http_exception_handler)
     app.add_exception_handler(RequestValidationError, validation_exception_handler)
@@ -160,7 +312,7 @@ def create_app(
 
     @app.get("/healthz", response_model=HealthOut, tags=["ops"], summary="Liveness")
     async def healthz() -> HealthOut:
-        return HealthOut()
+        return HealthOut(version=__version__, commit=settings.commit_sha)
 
     @app.get(
         "/readyz",
@@ -170,15 +322,34 @@ def create_app(
         responses={503: {"model": ReadyOut, "description": "A dependency is not ready"}},
     )
     async def readyz() -> JSONResponse:
-        body = ReadyOut(
-            status="not_ready",
-            checks={
-                "database": "not_configured",
-                "embedder": "not_configured",
-                "provider": "not_configured",
-            },
-        )
-        return JSONResponse(body.model_dump(), status_code=503)
+        if demo:
+            body = ReadyOut(
+                status="ready",
+                checks={"database": "demo", "embedder": "demo", "provider": "demo"},
+            )
+            return JSONResponse(body.model_dump(), status_code=200)
+        checks = {
+            "database": "not_configured",
+            "embedder": "not_configured",
+            "provider": provider_status,
+        }
+        if store is not None:
+            try:
+                store.ping()
+                expected = getattr(embedder, "dim", 384)
+                dimension = store.embedding_dimension()
+                checks["database"] = "ok" if dimension == expected else "DimensionMismatch"
+            except Exception as exc:
+                checks["database"] = type(exc).__name__
+        if embedder is not None:
+            try:
+                vector = embedder.embed_query("readiness")
+                checks["embedder"] = "ok" if len(vector) == embedder.dim else "DimensionMismatch"
+            except Exception as exc:
+                checks["embedder"] = type(exc).__name__
+        ready = checks["database"] == "ok" and checks["embedder"] == "ok"
+        body = ReadyOut(status="ready" if ready else "not_ready", checks=checks)
+        return JSONResponse(body.model_dump(), status_code=200 if ready else 503)
 
     @app.get("/metrics", include_in_schema=False)
     async def metrics() -> PlainTextResponse:

@@ -85,7 +85,7 @@ def test_json_formatter_never_serialises_exception_messages():
 
 def test_unhandled_exception_logs_never_contain_the_question(make_client, log_records):
     class LeakyRetriever:
-        def retrieve(self, question, *, document_ids, top_k):
+        def retrieve(self, question, *, tenant_id="public", document_ids, top_k):
             raise RuntimeError(f"failed for {question}")
 
     client = make_client(retriever=LeakyRetriever(), raise_server_exceptions=False)

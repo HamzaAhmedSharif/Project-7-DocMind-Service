@@ -1,6 +1,12 @@
 from dataclasses import dataclass
-from typing import Protocol
+from datetime import datetime
+from typing import TYPE_CHECKING, Protocol
 from uuid import UUID
+
+import numpy as np
+
+if TYPE_CHECKING:
+    from docmind_service.chunking import Chunk
 
 
 @dataclass(frozen=True)
@@ -10,6 +16,17 @@ class RetrievedChunk:
     page: int
     text: str
     score: float
+
+
+@dataclass(frozen=True)
+class DocumentRecord:
+    document_id: UUID
+    tenant_id: str
+    sha256: str
+    filename: str
+    pages: int
+    chunk_count: int
+    created_at: datetime
 
 
 @dataclass(frozen=True)
@@ -24,8 +41,40 @@ class LLMResult:
 
 class Retriever(Protocol):
     def retrieve(
-        self, question: str, *, document_ids: list[UUID] | None, top_k: int
+        self,
+        question: str,
+        *,
+        tenant_id: str,
+        document_ids: list[UUID] | None,
+        top_k: int,
     ) -> list[RetrievedChunk]: ...
+
+
+class Embedder(Protocol):
+    dim: int
+
+    def embed_passages(self, texts: list[str]) -> np.ndarray: ...
+
+    def embed_query(self, text: str) -> np.ndarray: ...
+
+
+class DocumentStore(Protocol):
+    def add_document(
+        self,
+        *,
+        tenant_id: str,
+        sha256: str,
+        filename: str,
+        pages: int,
+        chunks: list["Chunk"],
+        embeddings: np.ndarray,
+    ) -> tuple[DocumentRecord, bool]: ...
+
+    def list_documents(self, *, tenant_id: str) -> list[DocumentRecord]: ...
+
+    def delete_document(self, *, tenant_id: str, document_id: UUID) -> bool: ...
+
+    def ping(self) -> None: ...
 
 
 class LLMClient(Protocol):
@@ -34,6 +83,10 @@ class LLMClient(Protocol):
 
 class ProviderError(Exception):
     """The language model provider failed or is unavailable."""
+
+    def __init__(self, message: str = "", *, retry_after: int | None = None):
+        super().__init__(message)
+        self.retry_after = retry_after
 
 
 class RetrievalError(Exception):

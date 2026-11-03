@@ -21,8 +21,8 @@ class SpyRetriever:
         self.chunks = chunks
         self.calls = []
 
-    def retrieve(self, question, *, document_ids, top_k):
-        self.calls.append((question, document_ids, top_k))
+    def retrieve(self, question, *, tenant_id="public", document_ids, top_k):
+        self.calls.append((question, tenant_id, document_ids, top_k))
         return self.chunks
 
 
@@ -62,7 +62,7 @@ def test_answer_question_passes_top_k_and_document_ids_to_the_retriever():
     retriever = SpyRetriever([])
     ids = [uuid4()]
     answer_question("q", retriever=retriever, llm=ScriptedLLM([]), document_ids=ids, top_k=7)
-    assert retriever.calls == [("q", ids, 7)]
+    assert retriever.calls == [("q", "public", ids, 7)]
 
 
 def test_answer_question_returns_citations_and_usage():

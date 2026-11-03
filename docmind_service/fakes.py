@@ -1,7 +1,8 @@
 import re
-from uuid import UUID
+from datetime import UTC, datetime
+from uuid import UUID, uuid4
 
-from docmind_service.domain import LLMResult, RetrievedChunk
+from docmind_service.domain import DocumentRecord, LLMResult, RetrievedChunk
 
 DEMO_DOCUMENT_ID = UUID("00000000-0000-4000-8000-000000000001")
 
@@ -56,7 +57,12 @@ class InMemoryRetriever:
         self.chunks = chunks if chunks is not None else demo_chunks()
 
     def retrieve(
-        self, question: str, *, document_ids: list[UUID] | None, top_k: int
+        self,
+        question: str,
+        *,
+        tenant_id: str = "public",
+        document_ids: list[UUID] | None,
+        top_k: int,
     ) -> list[RetrievedChunk]:
         wanted = tokens(question)
         if not wanted:
@@ -78,6 +84,48 @@ class InMemoryRetriever:
                 )
         scored.sort(key=lambda c: (-c.score, c.chunk_id))
         return scored[:top_k]
+
+
+class InMemoryDocumentStore:
+    """DocumentStore double for API tests; no database or embeddings required."""
+
+    def __init__(self) -> None:
+        self.records: dict[tuple[str, str], DocumentRecord] = {}
+
+    def ping(self) -> None:
+        return None
+
+    def embedding_dimension(self) -> int:
+        return 384
+
+    def add_document(
+        self, *, tenant_id, sha256, filename, pages, chunks, embeddings
+    ) -> tuple[DocumentRecord, bool]:
+        key = (tenant_id, sha256)
+        existing = self.records.get(key)
+        if existing is not None:
+            return existing, False
+        record = DocumentRecord(
+            document_id=uuid4(),
+            tenant_id=tenant_id,
+            sha256=sha256,
+            filename=filename,
+            pages=pages,
+            chunk_count=len(chunks),
+            created_at=datetime.now(UTC),
+        )
+        self.records[key] = record
+        return record, True
+
+    def list_documents(self, *, tenant_id: str) -> list[DocumentRecord]:
+        return [record for (tenant, _), record in self.records.items() if tenant == tenant_id]
+
+    def delete_document(self, *, tenant_id: str, document_id: UUID) -> bool:
+        for key, record in list(self.records.items()):
+            if key[0] == tenant_id and record.document_id == document_id:
+                del self.records[key]
+                return True
+        return False
 
 
 class FakeLLM:

@@ -107,13 +107,31 @@
       },
       "HealthOut": {
         "properties": {
+          "commit": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Commit"
+          },
           "status": {
             "const": "ok",
             "default": "ok",
             "title": "Status",
             "type": "string"
+          },
+          "version": {
+            "title": "Version",
+            "type": "string"
           }
         },
+        "required": [
+          "version"
+        ],
         "title": "HealthOut",
         "type": "object"
       },
@@ -496,6 +514,16 @@
           "required": true
         },
         "responses": {
+          "200": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/DocumentOut"
+                }
+              }
+            },
+            "description": "Duplicate document; same sha256"
+          },
           "201": {
             "content": {
               "application/json": {
@@ -515,6 +543,16 @@
               }
             },
             "description": "Unauthorized (application/problem+json)"
+          },
+          "411": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Problem"
+                }
+              }
+            },
+            "description": "Length Required (application/problem+json)"
           },
           "413": {
             "content": {
@@ -545,16 +583,6 @@
               }
             },
             "description": "Too Many Requests (application/problem+json)"
-          },
-          "501": {
-            "content": {
-              "application/json": {
-                "schema": {
-                  "$ref": "#/components/schemas/Problem"
-                }
-              }
-            },
-            "description": "Not Implemented (application/problem+json)"
           },
           "503": {
             "content": {
