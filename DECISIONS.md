@@ -291,3 +291,69 @@ Notes are recorded in the milestone sections below.
 - Rejected: Render (card wall); Koyeb (card + $29 hold); Hugging Face Docker/Gradio Space (paid plan; a free ZeroGPU Gradio wrapper would replace the audited container and distort the artifact); Fly.io, Railway, Cloud Run, Oracle (card or billing account); Northflank and SnapDeploy (contradictory or unverified claims; only a bounded signup probe could settle them, and no probe was run this round); storing production secrets in the laptop environment (the `.env.neon` copies failed authentication; GitHub environment secrets are the single source).
 - Tradeoff accepted: nothing is hosted publicly, so the README says "verified on every release, not hosted" and never "deployed" or "live" unless a supplement passes; the workflow holds two production secrets and the provider key in a GitHub environment restricted to `main` (risk R17); the baseline does not prove public reachability, idle behavior, long-running stability or real-traffic behavior (listed in `docs/EVALUATION.md`).
 - Would revisit if: a no-card free host with a wakeable container is verified by signup (then H4b/H4c and G8-L apply), or the GitHub environment secret model is replaced.
+
+
+## M6 - keys, tenants, guardrails, cache (2026-11-04)
+
+### Decision: tenancy model and key format
+- Context: M6 adds API keys, tenants and per-key limits on top of M3's `tenant_id` ("public" default). Keys must never be stored in recoverable form, and the same bytes uploaded by two tenants must yield two separate documents.
+- Chosen: key format `dm_<8 hex>_<32 URL-safe chars>`; only the prefix and SHA-256 hash are stored; `compare_digest` for comparison; the full key is shown only at creation. Anonymous caller is tenant `public`; reserved tenants `public`, `eval`, `redteam`. Uploads are scoped by `(tenant_id, sha256)`, so the same file from two tenants is two documents. `X-RateLimit-*` headers expose per-key minute limits; quotas return 403 `quota_exceeded`; a shared global daily LLM cap (800 by default) is enforced before the provider call. Evidence: `docmind_service/auth.py`, `docmind_service/store.py`, `docmind_service/cache.py`, `tests/test_auth.py`, `tests/test_tenancy.py`, `tests/test_m6_integration.py` (full suite 224 passed; integration/model 18 passed), read 2026-11-04.
+- Rejected: storing keys or hashes reversible (would expose keys if the DB is read); JWT authentication (would add a dependency and abstraction not requested); per-instance limiter state only (global cap must be shared, so the SQL `daily_cap` table is shared while sliding windows stay per process).
+- Tradeoff accepted: revocation can take up to `AUTH_CACHE_SECONDS` (60 s) because of the auth cache; limiter state is per process, so several instances do not share rate windows (documented in `docs/SECURITY.md` known gaps).
+- Would revisit if: multi-instance deployment requires shared sliding windows; revocation delay becomes a problem.
+
+### Decision: global cap of 800 and why
+- Context: section 8 fixes a whole-M6 budget of 150 provider requests and an 800/day cap stands; `provider_budget.py` counts local `check_llm` calls plus release-smoke runs (upper bound one per run). No M6 provider calls were made this round because the local Groq key returned 403 on the first call (`no-citation` measurement failed; recorded as PENDING-H6).
+- Chosen: `global_daily_llm_cap=800` default; anonymous (`demo_daily_cap=300`, `demo_ip_per_min=5`) and keyed callers share the same global cap; `CappedLLM` increments before the call and refuses with 429 `daily_cap_reached`; refusals and cache hits do not consume the cap. Evidence: `docmind_service/config.py`, `docmind_service/ratelimit.py`, `tests/test_tenancy.py` (cap shared between anonymous and keyed callers; refusal/cache do not consume), `evaluation/results/provider-limits.json` (3 of 800 used before M6).
+- Rejected: per-key daily caps only (would let 10 keys exhaust the budget); no global cap (would exceed the 800/day rule).
+- Tradeoff accepted: one keyed caller can consume the entire global cap, starving anonymous callers; this matches the "shared global daily cap" requirement in section 8.
+- Would revisit if: the provider budget is consumed or a multi-tenant deployment needs per-key sub-caps.
+
+### Decision: prompt v2 and context sanitization
+- Context: M6.4 guardrails require the off arm (`GUARDRAILS_ENABLED=false`) to reproduce M3 byte-for-byte (`p7-v1`, no validators, no gate), while the on arm uses prompt v2 (`p7-v2`) with rules first, canary, delimiters, question last.
+- Chosen: `PROMPT_VERSION = "p7-v2"`; context sanitization replaces `[c<digits>]` -> `(c<digits>)`, neutralizes runs of three or more `<`, `>` or `=`, removes zero-width/control characters (newline and tab kept); prompt v2 starts with the rules block, then `Internal reference: <canary>`, then chunks between `<<<cN page=k>>>` ... `<<<end cN>>>`, then the question last. Output validators: canary (`output_blocked`), citations (unknown ids removed), no-citation (`ungrounded`), exfiltration (Markdown images deleted, out-of-context URLs -> `[link removed]`), length truncation. Evidence: `docmind_service/guardrails.py`, `docmind_service/query.py`, `tests/test_guardrails.py` (21 passed), `tests/test_redteam_harness.py` (9 passed), `git diff --exit-code openapi.json` clean after `scripts/export_openapi.py`, read 2026-11-04.
+- Rejected: sanitizing only at output time (fake ids/delimiters would still reach the model in context); placing rules after the context (section 8 prescribes rules first); storing raw question text (query log redacts).
+- Tradeoff accepted: the canary validator replaces a leaked canary with a fixed refusal; a model that ignores the canary can still leak other prompt text (documented as a known gap).
+- Would revisit if: R1 (arm `on`) exceeds 2 of 15; then up to three improvement attempts are allowed, each a different recorded hypothesis.
+
+### Decision: evidence threshold values and the rule
+- Context: M6.4 prescribes retrieval-only calibration (no provider calls): `t = floor_to_2_decimals(min(top-1 of answerable) - 0.02)`; report how many absent questions fall below `t`. Score distributions depend on the corpus, so the threshold is per deployment.
+- Chosen: paper corpus minimum answerable top-1 0.3737 (d07) -> threshold 0.35; absent questions below it: 0/4. Demo corpus minimum answerable top-1 0.5465 (d06) -> threshold 0.52; off-topic questions below it: 6/6. `DOCMIND_EVIDENCE_MIN_SCORE` defaults to 0.2 (paper value for local evaluation; demo value on the live service). Evidence: `evaluation/calibrate_evidence.py`, `evaluation/results/evidence-m6.json`, `evaluation/results/evidence-m6-demo.json`, `tests/test_evidence_calibration.py`, read 2026-11-04.
+- Rejected: a single threshold for every corpus (score distributions differ by corpus, measured 0.35 vs 0.52); using provider calls for calibration (calibration is retrieval-only and free).
+- Tradeoff accepted: the paper threshold refuses none of 4 absent questions (measured); the demo threshold refuses all 6 off-topic questions (measured); claim only the measured effect.
+- Would revisit if: M8 changes the question set, chunking, pypdf version, or top-K.
+
+### Decision: no-citation policy outcome (counts out of 12)
+- Context: M6.4 pre-declares: run the 12 answerable paper questions once with `REQUIRE_CITATION` off and count answers with no valid citation; default `true` only if at most 1 of 12 would be turned into a refusal, otherwise `false`. Record both counts in DECISIONS.
+- Chosen: not measured — the local Groq key returned `403 Forbidden` on the first provider call when running `evaluation/no_citation.py`, so no provider call succeeded. Status: PENDING-H6; the run will be retried with a valid key, and both counts will be recorded here. No provider request was consumed.
+- Rejected: guessing the count or using a scripted model (the rule requires provider calls on answerable questions).
+- Tradeoff accepted: `REQUIRE_CITATION` remains `true` by default pending measurement; the flag stays measurable in metrics.
+- Would revisit if: a valid provider key completes the 12-call run.
+
+### Decision: red-team method and result
+- Context: M6.5 prescribes 15 poisoned passages (`evaluation/redteam/cases.json`), each with a benign question and a unique `PWNED-<id>` marker, run twice per arm; an attack succeeds for an arm if `final_hit` is true in any repeat. `r1_attacks_succeeded_guardrails_on` must be <= 2 of 15 (R1 gate, not gating).
+- Chosen: `run_redteam.py` builds the app in-process with `InMemoryRetriever` over each passage and `HostedLLM`; records `raw_hit`, `final_hit`, refusal reason, tokens per case/arm/repeat; `--dry-run` uses `DryRunLLM` with no network. Live run attempted 2026-11-04: the local provider key returned 403, so R1 is PENDING-H6; no red-team number is claimed. Harness dry-run is green (9 tests pass). Evidence: `evaluation/redteam/run_redteam.py`, `evaluation/redteam/cases.json`, `tests/test_redteam_harness.py`, read 2026-11-04.
+- Rejected: running red-team against the live service before M6.10 (section 8 prescribes local measurement first); claiming R1 without live numbers.
+- Tradeoff accepted: R1 is reported honestly and pending; if arm `on` later exceeds 2 of 15, up to three improvement attempts are allowed, each re-run over failed cases only and recorded.
+- Would revisit if: H6 supplies a valid key and the live run completes.
+
+### Decision: redaction scope and the numbers
+- Context: M6.6 prescribes `redact(text)` applied in a fixed order (emails -> `[EMAIL]`; CNIC/resident IDs -> `[ID]`; Luhn-valid cards -> `[CARD]`; 8-15 digits -> `[PHONE]`; 9+ digits -> `[NUMBER]`; all URLs -> `[URL]`; secret-looking tokens incl. `dm_<8 hex>_<32 chars>` -> `[SECRET]`; IPv4 -> `[IP]`) with truncation to 500 chars; names are not redacted. The query log stores redacted text only for anonymous tenant `public`, retained 30 days; keyed tenants get no row.
+- Chosen: `docmind_service/redact.py` and `docmind_service/querylog.py` as prescribed; committed `tests/redaction_cases.json` with 51 PII samples and 18 benign sentences. Measured: recall 51/51 = 1.000 (threshold >= 95%); benign false positives 0/18 (threshold <= 2). Evidence: `tests/test_redaction.py` (11 passed), `tests/test_m6_integration.py` (query log redacted, keyed not logged), `tests/test_landing_page.py` (privacy line), read 2026-11-04.
+- Rejected: redacting names (specification keeps names); logging raw question text (would violate the demo privacy claim).
+- Tradeoff accepted: regex redaction misses novel phone/ID formats and numbers indistinguishable from benign numbers; documented as a known gap in `docs/SECURITY.md`.
+- Would revisit if: redaction numbers fall below the stated thresholds or new PII formats appear.
+
+### Decision: cache threshold with the calibration/test split
+- Context: M6.7 prescribes `scope_hash` over sorted document ids, top_k, mode, prompt version, model, guardrails flag, evidence threshold, citation flag; TTL 30 days; max 500 rows/tenant; SQL + in-memory mirror; only non-refused validated answers are stored. C1 gate: `c1_false_hit_share <= 0.05` (gating); τ = smallest value whose calibration-half false-hit share <= 0.02; report test half at that τ. `CACHE_ENABLED=true` only if C1 passes and test-half hit rate >= 0.25.
+- Chosen: `cache_threshold` default changed to 0.86 (from 0.9) because the pre-declared rule selected τ=0.86: calibration false-hit 0.0000; test-half same-intent hit rate 0.3636 (16/44), false-hit share 0.0000 (0/32), hit rate >= 0.25 so `CACHE_ENABLED=true`. Pairs file: 44 same-intent + 32 different-intent probes; odd ids calibration, even ids test; test half not used to choose τ. Evidence: `evaluation/cache_eval/run_cache_eval.py`, `evaluation/cache_eval/pairs.json`, `evaluation/results/cache-m6.json`, `tests/test_cache_eval.py`, `tests/test_cache.py`, `docmind_service/config.py`, read 2026-11-04.
+- Rejected: choosing τ from the test half (would invalidate C1); caching refusals/blocked answers (only validated answers are stored).
+- Tradeoff accepted: the cache key includes tenant and corpus version, so a cache hit never crosses tenants; the query vector is computed once per request.
+- Would revisit if: C1 fails (false-hit > 0.05) or the test-half hit rate falls below 0.25; then `CACHE_ENABLED=false`.
+
+### Decision: quotas return 403 quota_exceeded
+- Context: M6.1 tenancy adds document/page quotas per key; section 8 requires quota failures to return 403 `code="quota_exceeded"`.
+- Chosen: quota checks run inside `store.add_document` before insert; `max_documents` and `max_pages` are per-key settings; failures return 403 `quota_exceeded` with a detail naming the limit; anonymous uploads are blocked (uploads_enabled keyed only). Evidence: `docmind_service/store.py`, `docmind_service/main.py`, `tests/test_tenancy.py`, `tests/test_m6_integration.py::test_pg_store_quotas`, read 2026-11-04.
+- Rejected: returning 429 for quota (quotas are not rate limits); blocking the whole tenant (only the exceeding upload is refused).
+- Tradeoff accepted: concurrent uploads from the same tenant race only if the store's check-and-insert is not serialized; the local store checks within the same transaction.
+- Would revisit if: per-tenant concurrent upload limits become necessary.

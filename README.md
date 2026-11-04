@@ -8,7 +8,7 @@
 
 A RAG service built on top of [DocMind Agent](https://github.com/HamzaAhmedSharif/Project-6-DocMind-Agent), developed in the open with every claim backed by a measurement.
 
-**Status: milestone M5 of 8 (release verification against Neon; no persistent host).** `POST /v1/query` and the document endpoints work end to end against Postgres/pgvector with ONNX embeddings; the language model provider is the fake one by default. Every push and pull request runs the gates registered in `evaluation/gates.json`, the image is built, scanned and smoke-tested in CI, and one deliberately bad pull request proves the retrieval gate blocks a regression. Nothing below is claimed as built until its milestone is done.
+**Status: milestone M6 of 8 (offline implementation complete; provider-dependent measurements and the live key checks are pending).** `POST /v1/query` and the document endpoints work end to end against Postgres/pgvector with ONNX embeddings; API keys, tenants, per-key limits, quotas, guardrails and the semantic cache are built and tested offline. The language model provider is the fake one by default. Every push and pull request runs the gates registered in `evaluation/gates.json`, the image is built, scanned and smoke-tested in CI, and one deliberately bad pull request proves the retrieval gate blocks a regression. Nothing below is claimed as built until its milestone is done.
 
 ## Quality gates
 
@@ -55,6 +55,21 @@ Measured on that run (GitHub-hosted runner, 512 MB container limit, Neon free pl
 
 This project has no public instance. No payment card is used anywhere in it, and every free container host checked on 2026-11-04 either required a card or restricted the runtime (see DECISIONS.md). See "Run the container" to run it yourself with Docker.
 
+## Security and limits
+
+The service is not hosted publicly. The M5 release image is verified in CI; the M6 key, tenant, guardrail and cache features are built and tested offline, and the live key checks are part of M6.10. This section describes the design and the offline evidence, not a public deployment.
+
+- **Keys and tenants:** `X-API-Key` is optional. A key is `dm_<8 hex>_<32 URL-safe chars>`; only the prefix and a SHA-256 hash are stored, and keys are revocable. Keyed tenants have isolated documents, a per-key minute window, a per-key daily cap and document/page quotas. Anonymous callers are tenant `public`; anonymous uploads are blocked.
+- **Limits:** anonymous demo 5 questions/minute per IP and 300/day; keyed tenants 30/minute and 200/day by default; a shared global cap of 800 provider calls/day; uploads 10 MB/200 pages; 20 documents/500 pages per key. Quota failures return 403 `quota_exceeded`. Limiter state is per process, so this is a single-instance design.
+- **Guardrails:** prompt v2 treats retrieved text as untrusted, neutralizes fake citations and delimiter runs, and uses a canary. Unknown citations are removed; a non-refused answer with no valid citation becomes `ungrounded` when `REQUIRE_CITATION` is on; Markdown images and URLs not present in the context are removed; long answers are truncated. `GUARDRAILS_ENABLED=false` reproduces the M3 prompt byte-for-byte.
+- **Evidence threshold:** paper 0.35 (refuses 0 of 4 absent questions), demo 0.52 (refuses 6 of 6 off-topic questions), both from retrieval-only calibration; the threshold is per corpus and is not guessed.
+- **Cache:** keyed by tenant, corpus version and scope hash; τ = 0.86 from the pre-declared calibration/test split; test-half same-intent hit rate 0.3636 and false-hit share 0.0000. Only non-refused, validated answers are stored; 30-day TTL; at most 500 rows per tenant.
+- **Demo query log:** anonymous questions are stored redacted for 30 days (emails, phone numbers, ID-like numbers and links removed; names may remain). Keyed tenants are not logged. Do not enter personal data.
+- **Red-team:** 15 poisoned passages, arm off vs on, two repeats. The live R1 run is **pending H6** because the local provider key returned 403; no red-team number is claimed yet. The harness dry-run is green.
+- **Not covered:** no WAF or bot protection, no per-IP protection beyond the caps, regex redaction misses names and novel formats, revocation can take up to 60 s, and poisoned facts are out of scope.
+
+Full threat table, test evidence and residual risks: [`docs/SECURITY.md`](docs/SECURITY.md).
+
 ## Planned
 
 | Milestone | Deliverable |
@@ -63,8 +78,8 @@ This project has no public instance. No payment card is used anywhere in it, and
 | M2 | Service core on fakes: query, citations, errors, request ids, JSON logs (done) |
 | M3 | Postgres and pgvector, ONNX embeddings, retrieval parity and recall gate (done) |
 | M4 | Full CI/CD with quality gates, image build and scan (done) |
-| M5 | Release verification against Neon, landing page, measured numbers |
-| M6 | API keys, tenants, rate limits, guardrails, semantic cache |
+| M5 | Release verification against Neon, landing page, measured numbers (done) |
+| M6 | API keys, tenants, rate limits, guardrails, semantic cache (offline built; live checks pending) |
 | M7 | Metrics, dashboard, load test, capacity model |
 | M8 | Service-level evaluation and write-up |
 
@@ -86,7 +101,7 @@ curl -s http://127.0.0.1:8000/v1/query -H 'content-type: application/json' \
   -d '{"question": "What is self-attention?"}'
 ```
 
-The answer comes from the fake model and the sample chunks. The response carries citations, usage and a request id, which is also returned in the `X-Request-ID` header; logs are JSON lines and never contain question or answer text.
+The answer comes from the fake model and the sample chunks. The response carries citations, usage and a request id, which is also returned in the `X-Request-ID` header; application logs are JSON lines and never contain question or answer text. Anonymous demo questions are stored redacted for 30 days in the demo query log (see "Security and limits").
 
 ## Layout
 
@@ -96,12 +111,12 @@ scripts/           export_openapi, fetch_corpus, make_tiny_pdf, smoke_http, chec
 evaluation/        questions, scorer, gates, retrieval runner, committed reference fixtures
 deploy/            compose files: dev database, CI app+database stack
 tests/             offline tests plus integration/model marked tests
-docs/              evaluation guide (gates, fixtures, reproduction)
+docs/              evaluation guide and security model (docs/SECURITY.md)
 Dockerfile         single-stage non-root image with the ONNX model baked in
 requirements.lock  Linux lock generated inside the base image (scripts/make_lock.ps1)
 openapi.json       committed API contract
 DECISIONS.md       decisions and engineering notes, each with its evidence
-SECURITY.md        how to report a vulnerability and what the service stores
+SECURITY.md        how to report a vulnerability
 ```
 
 ## License

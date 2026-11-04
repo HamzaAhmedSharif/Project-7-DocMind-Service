@@ -15,3 +15,14 @@ Every public number with its source and conditions. A number quoted without its 
 | G8-C release-smoke run | success, 9/9 checks | manual dispatch, head `c149900`; GitHub-hosted runner, 512 MB container limit, Neon free plan, Frankfurt | https://github.com/HamzaAhmedSharif/Project-7-DocMind-Service/actions/runs/41809139449 | c149900 | 2026-11-04 |
 | Hosting status | no persistent public instance | no persistent host; every free container host checked on 2026-11-04 either required a card or restricted the runtime | `docs/OPERATIONS.md` | c149900 | 2026-11-04 |
 | A1.6 free-host probes | not run | optional supplement probes were not executed; no host was tested | this file | — | 2026-11-04 |
+| API-key format and storage | `dm_<8 hex>_<32 URL-safe chars>`; prefix + SHA-256 only | offline unit/integration tests; full key shown once and never stored | `docmind_service/auth.py`, `tests/test_auth.py` | — | 2026-11-04 |
+| Tenant isolation | two keys, same PDF -> two documents | offline API isolation matrix; list/delete/query/document filter; SQL cache/auth integration tests | `tests/test_tenancy.py`, `tests/test_m6_integration.py` | — | 2026-11-04 |
+| Rate limits | demo 5/min + 300/day; key 30/min + 200/day; global 800/day | offline tests; limiter state is per process | `docmind_service/config.py`, `tests/test_tenancy.py` | — | 2026-11-04 |
+| Quota failure | 403 `quota_exceeded` | document and page quotas; SQL and in-memory stores | `tests/test_tenancy.py`, `tests/test_m6_integration.py` | — | 2026-11-04 |
+| Redaction recall | 51/51 = 1.000 | synthetic PII set; threshold at least 95% | `tests/redaction_cases.json`, `tests/test_redaction.py` | — | 2026-11-04 |
+| Redaction benign false positives | 0/18 | benign numbers must not change; threshold at most 2 | `tests/redaction_cases.json`, `tests/test_redaction.py` | — | 2026-11-04 |
+| Evidence threshold, paper | 0.35 | min answerable top-1 0.3737 (d07) - 0.02, floored; 0/4 absent questions below it | `evaluation/results/evidence-m6.json` | — | 2026-11-04 |
+| Evidence threshold, demo | 0.52 | min answerable top-1 0.5465 (d06) - 0.02, floored; 6/6 off-topic questions below it | `evaluation/results/evidence-m6-demo.json` | — | 2026-11-04 |
+| Cache calibration | tau 0.86; test hit rate 0.3636; test false-hit 0.0000 | 44 same-intent + 32 different-intent probes; odd calibration / even test; selection on calibration only | `evaluation/results/cache-m6.json` | — | 2026-11-04 |
+| Red-team R1 | pending H6 | live run blocked by provider 403 on the first call; dry-run harness green; no R1 number claimed | `docs/SECURITY.md`, `reports/M6.md` | — | 2026-11-04 |
+| Demo query-log retention | 30 days, anonymous tenant only | redacted text, at most 500 characters; keyed tenants get no row | `docmind_service/querylog.py`, `tests/test_redaction.py` | — | 2026-11-04 |
