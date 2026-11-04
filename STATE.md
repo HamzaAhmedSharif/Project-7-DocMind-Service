@@ -43,10 +43,10 @@ Evidence branch: evidence/bad-chunking at 427d2c5 (unmerged)
 
 ## Provider ledger today (UTC)
 - Release-smoke runs today: 4 — counted by `provider_budget.py` from the workflow-run list (upper bound one request per run).
-- Pre-flight (`provider_budget.py --used-today 24`, verbatim): `release_smoke_runs_today=4`, `used_today=24`, `used_today_upper_bound=28`.
-- M6 measurement attempts (script output): `no_citation=1/12 recommended_default=True provider_requests=21`; red-team `provider_requests=39` (arm `off`) + `49` (arm `on`) = 88. Total 109.
-- Post-flight (`provider_budget.py --used-today 133`, verbatim): `release_smoke_runs_today=4`, `used_today=133`, `used_today_upper_bound=137` of 800.
-- M6-round attempts including the aborted pre-run (3 successful calls) and six auth-rejected attempts: 118, within the 150-request M6 budget.
+- Pre-flight (`provider_budget.py --used-today 1`, verbatim): `release_smoke_runs_today=4`, `used_today=1`, `used_today_upper_bound=5` (the `check_llm` retest).
+- M6 measurement calls: 3 from the aborted pre-run + 12 no-citation questions + 60 red-team case-runs = 75 successful provider calls; script attempt counts including in-run retries: 3 + 21 + 88 = 112.
+- Post-flight (`provider_budget.py --used-today 76`, verbatim): `release_smoke_runs_today=4`, `used_today=76`, `used_today_upper_bound=80` of 800.
+- M6-round calls 75 (attempts 112) are within the 150-request M6 budget.
 - `evaluation/results/provider-limits.json` keeps the M5 `release_smoke` accounting block and adds the post-flight `m6_budget` block.
 
 ## Test coverage note
@@ -56,7 +56,7 @@ Evidence branch: evidence/bad-chunking at 427d2c5 (unmerged)
 1. Manager: verdict on M6 (offline part + provider measurements; R1 PASS 0/15, no-citation 1/12 keeps `REQUIRE_CITATION=true`).
 2. No push of the M6 commits; `c149900` is the pushed head.
 3. M6.10 (Neon/live key checks, [H8]) is not started; no public host and no `DEMO_URL` per Amendment A1.
-4. Provider budget: `used_today=133`, upper bound 137 of 800; M6-round attempts 118 of the 150-request M6 budget.
+4. Provider budget: `used_today=76`, upper bound 80 of 800; M6-round calls 75 (attempts 112) of the 150-request M6 budget.
 5. gitleaks full history and staged scan: no leaks found (verbatim in `reports/M5.md`).
 6. `docs/FACTS.md` is new; every row cites a source file or run URL.
 

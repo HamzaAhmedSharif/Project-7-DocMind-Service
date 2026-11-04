@@ -22,7 +22,7 @@
   },
   "m6_budget": {
     "release_smoke_runs": 4,
-    "used_today": 133,
-    "used_today_upper_bound": 137
+    "used_today": 76,
+    "used_today_upper_bound": 80
   }
 }
