@@ -41,6 +41,13 @@ def test_parse_citations_returns_cited_chunks_in_order_of_first_appearance():
     assert invalid == 0
 
 
+def test_parse_citations_accepts_full_width_brackets():
+    _, mapping = build_prompt("q", [chunk(1), chunk(2)])
+    cited, invalid = parse_citations("Answer 【c2】 and [c1].", mapping)
+    assert [c.chunk_id for c in cited] == ["x:2", "x:1"]
+    assert invalid == 0
+
+
 def test_parse_citations_counts_unknown_ids_and_ignores_duplicates():
     _, mapping = build_prompt("q", [chunk(1)])
     cited, invalid = parse_citations("[c1] again [c1] and [c9]", mapping)

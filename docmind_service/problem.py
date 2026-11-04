@@ -1,4 +1,5 @@
 import logging
+import math
 from typing import Any
 
 from fastapi import Request
@@ -8,6 +9,7 @@ from starlette.exceptions import HTTPException as StarletteHTTPException
 
 from docmind_service.domain import ProviderError, RetrievalError
 from docmind_service.observability import REQUEST_ID_HEADER, request_id_var
+from docmind_service.ratelimit import LimitExceeded
 from docmind_service.schemas import Problem
 
 PROBLEM_JSON = "application/problem+json"
@@ -80,6 +82,15 @@ async def provider_error_handler(request: Request, exc: ProviderError) -> JSONRe
 async def retrieval_error_handler(request: Request, exc: RetrievalError) -> JSONResponse:
     detail = "The retrieval backend is unavailable."
     return problem_response(503, detail, headers={"Retry-After": "30"})
+
+
+async def limit_exceeded_handler(request: Request, exc: LimitExceeded) -> JSONResponse:
+    retry_after = str(max(1, math.ceil(exc.retry_after)))
+    if exc.code == "daily_cap_reached":
+        detail = "The demo's daily question cap has been reached. Try again after midnight UTC."
+    else:
+        detail = "Too many requests from this address. Try again shortly."
+    return problem_response(429, detail, headers={"Retry-After": retry_after})
 
 
 async def unhandled_exception_handler(request: Request, exc: Exception) -> JSONResponse:

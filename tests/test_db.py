@@ -150,6 +150,21 @@ def test_upload_list_delete_through_the_api(store, make_client):
     assert client.delete(f"/v1/documents/{document_id}").status_code == 204
 
 
+@pytest.mark.integration
+def test_daily_cap_sql_counter(dsn):
+    from docmind_service.ratelimit import DailyCap
+
+    pool = make_pool(dsn)
+    pool.open(wait=True)
+    try:
+        cap = DailyCap(pool, limit=10)
+        scope = f"test-{uuid4().hex}"
+        assert cap.increment(scope) == 1
+        assert cap.increment(scope) == 2
+    finally:
+        pool.close()
+
+
 def test_dotenv_loader_sets_missing_values_only(tmp_path, monkeypatch):
     monkeypatch.setenv("DOCMIND_DOTENV_KEEP", "original")
     monkeypatch.delenv("DOCMIND_DOTENV_NEW", raising=False)

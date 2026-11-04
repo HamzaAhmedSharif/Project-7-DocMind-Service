@@ -1,14 +1,16 @@
 import logging
 import time
 from contextlib import asynccontextmanager
+from pathlib import Path
 from typing import Annotated
 from uuid import UUID
 
 import numpy as np
 from fastapi import APIRouter, Depends, FastAPI, File, Request, UploadFile
 from fastapi.exceptions import RequestValidationError
-from fastapi.responses import JSONResponse, PlainTextResponse, Response
+from fastapi.responses import FileResponse, JSONResponse, PlainTextResponse, Response
 from fastapi.security import APIKeyHeader
+from fastapi.staticfiles import StaticFiles
 from starlette.exceptions import HTTPException as StarletteHTTPException
 
 from docmind_service import __version__
@@ -23,6 +25,7 @@ from docmind_service.observability import configure_logging, request_context_mid
 from docmind_service.problem import (
     error_responses,
     http_exception_handler,
+    limit_exceeded_handler,
     problem_response,
     provider_error_handler,
     retrieval_error_handler,
@@ -30,6 +33,13 @@ from docmind_service.problem import (
     validation_exception_handler,
 )
 from docmind_service.query import PROMPT_VERSION, answer_question
+from docmind_service.ratelimit import (
+    CappedLLM,
+    DailyCap,
+    LimitExceeded,
+    SlidingWindowLimiter,
+    client_ip,
+)
 from docmind_service.schemas import (
     Citation,
     DocumentList,
@@ -48,6 +58,12 @@ DESCRIPTION = (
 )
 BYTE_STEP = 1024 * 1024
 DEMO_DOCUMENTS = "Document storage needs DOCMIND_DATABASE_URL."
+UPLOADS_DISABLED = "Uploads are disabled on this deployment."
+CSP = (
+    "default-src 'none'; script-src 'self'; style-src 'self'; connect-src 'self'; "
+    "img-src 'self' data:; base-uri 'none'; form-action 'none'; frame-ancestors 'none'"
+)
+STATIC_DIR = Path(__file__).resolve().parent / "static"
 
 query_logger = logging.getLogger("docmind.query")
 documents_logger = logging.getLogger("docmind.documents")
@@ -83,6 +99,8 @@ def _dependency_problem(detail: str = "The document service is unavailable.") ->
 )
 def upload_document(file: Annotated[UploadFile, File()], request: Request) -> JSONResponse:
     state = request.app.state
+    if not state.settings.uploads_enabled:
+        return problem_response(403, UPLOADS_DISABLED)
     if state.demo:
         return problem_response(501, DEMO_DOCUMENTS)
     if state.store is None or state.embedder is None:
@@ -171,6 +189,8 @@ def list_documents(request: Request) -> DocumentList | JSONResponse:
 )
 def delete_document(document_id: UUID, request: Request) -> Response | JSONResponse:
     state = request.app.state
+    if not state.settings.uploads_enabled:
+        return problem_response(403, UPLOADS_DISABLED)
     if state.demo:
         return problem_response(501, DEMO_DOCUMENTS)
     if state.store is None:
@@ -196,6 +216,9 @@ def query(body: QueryIn, request: Request) -> QueryOut | JSONResponse:
     if body.mode == "multi":
         return problem_response(501, "Multi-agent mode is not implemented yet; use mode single.")
     state = request.app.state
+    allowed, retry_after = state.limiter.allow(client_ip(request, state.settings.trust_proxy_hops))
+    if not allowed:
+        raise LimitExceeded("rate_limited", retry_after)
     started = time.perf_counter()
     result = answer_question(
         body.question,
@@ -271,6 +294,10 @@ def create_app(
     else:
         provider_status = "configured"
 
+    daily_cap = DailyCap(pool, settings.demo_daily_cap)
+    llm = CappedLLM(llm, daily_cap)
+    limiter = SlidingWindowLimiter(settings.demo_ip_per_min, 60.0)
+
     @asynccontextmanager
     async def lifespan(_app: FastAPI):
         try:
@@ -301,6 +328,8 @@ def create_app(
     app.state.embedder = embedder
     app.state.retriever = retriever
     app.state.llm = llm
+    app.state.limiter = limiter
+    app.state.daily_cap = daily_cap
     app.state.provider_status = provider_status
     app.state.git_sha = settings.commit_sha
     app.middleware("http")(request_context_middleware)
@@ -308,7 +337,23 @@ def create_app(
     app.add_exception_handler(RequestValidationError, validation_exception_handler)
     app.add_exception_handler(ProviderError, provider_error_handler)
     app.add_exception_handler(RetrievalError, retrieval_error_handler)
+    app.add_exception_handler(LimitExceeded, limit_exceeded_handler)
     app.add_exception_handler(Exception, unhandled_exception_handler)
+
+    @app.middleware("http")
+    async def security_headers(request: Request, call_next):
+        response = await call_next(request)
+        response.headers.setdefault("X-Content-Type-Options", "nosniff")
+        response.headers.setdefault("Referrer-Policy", "no-referrer")
+        if request.url.path == "/" or request.url.path.startswith("/static/"):
+            response.headers["Content-Security-Policy"] = CSP
+        return response
+
+    app.mount("/static", StaticFiles(directory=STATIC_DIR), name="static")
+
+    @app.get("/", include_in_schema=False)
+    async def landing() -> FileResponse:
+        return FileResponse(STATIC_DIR / "index.html", media_type="text/html")
 
     @app.get("/healthz", response_model=HealthOut, tags=["ops"], summary="Liveness")
     async def healthz() -> HealthOut:

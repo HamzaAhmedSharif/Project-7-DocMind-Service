@@ -2,7 +2,7 @@ import os
 from functools import lru_cache
 from typing import Literal
 
-from pydantic import Field, SecretStr
+from pydantic import Field, SecretStr, field_validator
 from pydantic_settings import BaseSettings, SettingsConfigDict
 
 
@@ -35,6 +35,10 @@ class Settings(BaseSettings):
     embedding_model: str = "sentence-transformers/all-MiniLM-L6-v2"
     model_cache_dir: str | None = None
     git_sha: str | None = None
+    uploads_enabled: bool = True
+    demo_daily_cap: int = 300
+    demo_ip_per_min: int = 5
+    trust_proxy_hops: int = 0
 
     @property
     def database_url_value(self) -> str | None:
@@ -48,8 +52,16 @@ class Settings(BaseSettings):
     def llm_api_key_value(self) -> str | None:
         return self.llm_api_key.get_secret_value() if self.llm_api_key else None
 
+    @field_validator("git_sha", mode="before")
+    @classmethod
+    def _empty_git_sha_is_none(cls, value):
+        if isinstance(value, str) and not value.strip():
+            return None
+        return value
+
     @property
     def commit_sha(self) -> str | None:
+        # RENDER_GIT_COMMIT is set by some hosts; the image bakes DOCMIND_GIT_SHA.
         return self.git_sha or os.environ.get("RENDER_GIT_COMMIT") or None
 
 

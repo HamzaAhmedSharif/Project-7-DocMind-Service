@@ -1,0 +1,28 @@
+/* DocMind Service landing page (M5.3) */
+
+/* --- Reset & base --- */
+*, *::before, *::after{box-sizing:border-box;margin:0;padding:0}
+html{font-family:system-ui,Arial,sans-serif;line-height:1.5}
+body{margin:0;background:#f8f9fa;color:#212529}
+
+/* --- Layout --- */
+.header{padding:1rem 1.5rem;background:#fff;border-bottom:1px solid #eee}
+.header h1{margin:0;font-size:1.25rem}
+.main{max-width:800px;margin:auto;padding:1rem}
+.card{background:#fff;border:1px solid #e0e0e0;border-radius:8px;padding:1.5rem;margin:1rem 0}
+.btn{display:inline-block;padding:0.5rem 1rem;margin:0.25rem;background:#1976d2;color:#fff;border:none;border-radius:4px;cursor:pointer;font-size:0.9rem}
+.btn:disabled{background:#777;cursor:default}
+.btn:hover:not(:disabled){background:#1565c0}
+.question-box{border:1px solid #ccc;border-radius:4px;padding:0.75rem;margin:0.5rem 0;width:100%;min-height:120px;resize:vertical}
+.muted{color:#6c757d;font-size:0.875rem}
+.privacy{font-size:0.75rem;color:#6c757d;margin-top:1.5rem;padding-top:1rem;border-top:1px solid #eee}
+.footer{padding:1rem 1.5rem;text-align:center}
+.hidden{display:none}
+#answer,#citations{margin:0.5rem 0}
+#citations ul{margin-left:1.25rem}
+label{display:block;margin-bottom:0.25rem}
+#ask-button{margin-top:0.75rem}
+#health-status{background:#e3f2fd;border-color:#bbdefb}
+
+/* --- Buttons --- */
+#sample-buttons .btn{margin:0.2rem 0;display:block}

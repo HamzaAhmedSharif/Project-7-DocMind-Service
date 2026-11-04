@@ -6,7 +6,9 @@ from docmind_service.domain import LLMClient, LLMResult, RetrievedChunk, Retriev
 
 PROMPT_VERSION = "p7-v1"
 NO_EVIDENCE_ANSWER = "I could not find relevant information in the indexed documents."
-_CITATION = re.compile(r"\[(c\d+)\]")
+# M6 makes this a measured setting; M5 needs nonsense questions to refuse.
+MIN_EVIDENCE_SCORE = 0.2
+_CITATION = re.compile(r"[\[【](c\d+)[\]】]")
 
 PROMPT_TEMPLATE = """Answer the question using only the context below. If the context does not \
 contain the answer, say so clearly.
@@ -71,6 +73,7 @@ def answer_question(
     chunks = retriever.retrieve(
         question, tenant_id=tenant_id, document_ids=document_ids, top_k=top_k
     )
+    chunks = [chunk for chunk in chunks if chunk.score >= MIN_EVIDENCE_SCORE]
     if not chunks:
         return QueryResult(NO_EVIDENCE_ANSWER, [], True, "no_evidence", None, 0, 0)
     prompt, mapping = build_prompt(question, chunks)

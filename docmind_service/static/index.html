@@ -1,0 +1,57 @@
+<!doctype html>
+<html lang="en">
+<head>
+  <meta charset="utf-8">
+  <title>DocMind Service</title>
+  <meta name="viewport" content="width=device-width, initial-scale=1">
+  <link rel="stylesheet" href="/static/app.css">
+</head>
+<body>
+  <header class="header">
+    <h1>DocMind Service</h1>
+    <p class="muted">DocMind Service is a portfolio project running on free tiers. Answers come from the sample documents listed with their licenses; answers may be wrong, check the cited pages.</p>
+  </header>
+
+  <main class="main">
+    <div class="card" id="health-status" role="status">Checking the service...</div>
+
+    <section class="card">
+      <h2>Ask a question</h2>
+      <p class="muted">Maximum 2,000 characters. Limits: 5 questions per minute per address and 300 questions per day.</p>
+      <form id="query-form">
+        <label class="muted" for="question">Your question</label>
+        <textarea class="question-box" id="question" name="question" maxlength="2000" required placeholder="Type your question..."></textarea>
+        <div class="muted" id="char-counter">0 / 2000 characters</div>
+        <button class="btn" type="submit" id="ask-button">Ask</button>
+      </form>
+    </section>
+
+    <section class="card">
+      <h2>Sample questions</h2>
+      <div id="sample-buttons"></div>
+    </section>
+
+    <section class="card hidden" id="result-area">
+      <h3>Answer</h3>
+      <p class="muted" id="request-id">Request ID: -</p>
+      <div id="answer"></div>
+      <div id="citations"></div>
+      <div class="muted" id="usage">-</div>
+      <div class="muted" id="refusal">-</div>
+    </section>
+  </main>
+
+  <footer class="footer">
+    <div class="privacy">
+      This demo does not store your questions. Server logs keep only counts and timings.
+    </div>
+    <div class="muted">
+      <a href="/docs">API docs</a> |
+      <a href="https://github.com/HamzaAhmedSharif/Project-7-DocMind-Service">GitHub</a> |
+      <a href="https://github.com/HamzaAhmedSharif/Project-7-DocMind-Service/blob/main/README.md#quality-gates">README results</a>
+    </div>
+  </footer>
+
+  <script src="/static/app.js" defer></script>
+</body>
+</html>
