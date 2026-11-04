@@ -1,8 +1,8 @@
 # STATE
-Updated: 2026-11-05 14:00 UTC
-Current milestone: M6 · complete including M6.10 live key verification (local, per Amendment A1) + CI fix round
-Last commit: a300a46 revert: restore querylog warning formatting
-Last pushed head: c149900 · origin/main; M6 commits are local and not pushed
+Updated: 2026-11-05 (overnight, Asia/Shanghai)
+Current milestone: M7 · complete (L1 PASS, MEM PASS, drills verified; provider requests 0) — M7.8 live checks on the pushed head recorded below after the push
+Last commit: HEADHASH
+Last pushed head: HEADHASH · origin/main
 Evidence branch: evidence/bad-chunking at 427d2c5 (unmerged)
 
 ## Milestones
@@ -11,10 +11,18 @@ Evidence branch: evidence/bad-chunking at 427d2c5 (unmerged)
 | M1 | done | — | 0e8a035 | 2026-10-30 |
 | M2 | done | — | ddf8f69 | 2026-10-30 |
 | P0 | done | reports/P0.md | af79b1d | 2026-11-03 |
-| M3 | done (manager released M4) | reports/M3.md | 1538e20 (M3c) + FIX commits 992ee80 | 2026-11-03 |
-| M4 | built, pushed to origin/main; manager verdict not recorded | reports/M4.md | beb6731, e1b816d, 123e697, ca18652, f4ecd92 | 2026-11-03 |
-| M5 | G8-C green; documents round complete; awaiting manager verdict | reports/M5.md | c149900 (pushed) + docs round (local) | 2026-11-04 |
-| M6 | complete incl. M6.10 live key verification (local, per Amendment A1) + CI fix round | reports/M6.md | d62681d, a173df0, 66b87ea + measurement commit (local) + M6.10 local verification (local) + CI fix round | 2026-11-05 |
+| M3 | PASS-WITH-NOTES | reports/M3.md | 1538e20 (M3c) + FIX commits 992ee80 | 2026-11-03 |
+| M4 | PASS-WITH-NOTES | reports/M4.md | beb6731, e1b816d, 123e697, ca18652, f4ecd92 | 2026-11-03 |
+| M5 | PASS-WITH-NOTES (Amendment A1 Path C) | reports/M5.md | e5bfe5a | 2026-11-04 |
+| M6 | PASS-WITH-NOTES | reports/M6.md | e3cfb2c | 2026-11-05 |
+| M7 | complete — verdict in the manager's morning report | reports/M7.md | 46591eb, d410e3c, 472cc07, C4HASH | 2026-11-05 |
+
+## M7 verification (2026-11-05, local, fake provider — 0 provider requests)
+- **Load matrix** (`evaluation/results/load-m7.json`): 102,937 requests across the §9 matrix; every run HTTP 200, 0 timeouts, 0 OOM kills under `-m 512m`. Headline: unconstrained c10 mixed 113.6 rps, p95 0.107 s; soak 69,927 requests/600 s, memory 208.4 → 208.1 MB.
+- **Gates, re-run by the manager on the committed JSON:** `check_gates.py --stage load` → L1 PASS (0); `--stage memory` → MEM PASS (225.8 ≤ 480).
+- **Drills:** 1) DB down → 503 + `Retry-After: 30` + `retrieval_error`, recovery 2.3 s (first run exposed a 500 from the cache path — fixed, regression tests in `tests/test_db_down.py`); 2) provider down → 503 `provider_error`; 3) cap=1 → 200, 429 `daily_cap_reached` + `Retry-After`, refusal still 200; 4) cold start 1.69/1.77 s; 5) uploads 413/422/422/422, 204.7 MiB after. Drills 2/3/5 ran against an isolated drill database (the daily cap is Postgres-backed and shared).
+- **Suite:** `pytest -q` 248 passed, 19 deselected; `ruff check .` clean.
+- **M7.8 (Amendment A1 mapping):** M78TEXT
 
 ## M5 verification (Amendment A1)
 - **G8-C:** release-smoke run 41809139449 (manual dispatch, head `c149900`), 9/9 PASS — https://github.com/HamzaAhmedSharif/Project-7-DocMind-Service/actions/runs/41809139449.
@@ -35,37 +43,26 @@ Evidence branch: evidence/bad-chunking at 427d2c5 (unmerged)
 | H6 | Groq key | Resolved: `check_llm` green (78 prompt / 28 completion, 4.010 s); configured key accepted for the M6 measurements (no-citation 12 questions, red-team 60 case-runs) | resolved |
 
 ## Blocked items
-- None blocking M5.
+- None blocking M7 or M8.
 - **Known non-blocking defect:** the laptop `.env.neon` still holds non-working values. It affects only future laptop-side Neon work; use the GitHub environment secrets or replace the laptop file. The CI path is unaffected.
 
 ## Post-hoc threshold changes
-- `MIN_EVIDENCE_SCORE = 0.2` added in `query.py` so `zzzz qqqq` (top score 0.1818) refuses with `no_evidence`; M6 will make it a measured setting.
+- E3 (M3): 24/26 → 23/26†, recorded in DECISIONS with the measured 23/26 and the pypdf-drift root cause.
+- `MIN_EVIDENCE_SCORE = 0.2` (pre-M6) became the calibrated settings at M6: paper 0.35, demo 0.52; cache τ 0.86 by the pre-declared §8.7 selection rule (not post-hoc).
 
-## Provider ledger today (UTC)
-- Release-smoke runs today: 4 — counted by `provider_budget.py` from the workflow-run list (upper bound one request per run).
-- Pre-flight (`provider_budget.py --used-today 1`, verbatim): `release_smoke_runs_today=4`, `used_today=1`, `used_today_upper_bound=5` (the `check_llm` retest).
-- M6 measurement calls: 3 from the aborted pre-run + 12 no-citation questions + 60 red-team case-runs = 75 successful provider calls; script attempt counts including in-run retries: 3 + 21 + 88 = 112.
-- Post-flight (`provider_budget.py --used-today 76`, verbatim): `release_smoke_runs_today=4`, `used_today=76`, `used_today_upper_bound=80` of 800.
-- M6-round calls 75 (attempts 112) are within the 150-request M6 budget.
-- `evaluation/results/provider-limits.json` keeps the M5 `release_smoke` accounting block and adds the post-flight `m6_budget` block.
+## Provider ledger (UTC)
+- 2026-11-04 (M6 day): `used_today=76`, upper bound 80 of 800; M6-round calls 75 (attempts 112) of the 150-request M6 budget.
+- 2026-11-05 (M7 day): M7 itself used **0** provider requests (fake provider for all load and drills). Release-smoke runs ≤ 1 request each.
+- M8 budget ahead: ≤ 100 requests total, ≤ 60 per UTC day.
 
 ## Test coverage note
 - `docmind_service/ratelimit.py` has dedicated unit tests in `tests/test_ratelimit.py` (7 tests: window math/Retry-After, key independence, eviction bound, client-IP spoof resistance, daily-cap rollover, `CappedLLM` increment order, no-evidence refusal not incrementing the cap). Not a gap.
 
 ## Notes for the next session
-1. Manager: verdict on M6 (offline part + provider measurements; R1 PASS 0/15, no-citation 1/12 keeps `REQUIRE_CITATION=true`).
-2. No push of the M6 commits; `c149900` is the pushed head.
-3. M6.10 live key verification completed locally under Amendment A1 (no public host, no `DEMO_URL`); release image `703a842` run locally with a local database, `live_key_check.ps1` 9/9 PASS, manager checks run verbatim (see `reports/M6.md`).
-4. Provider budget: `used_today=76`, upper bound 80 of 800; M6-round calls 75 (attempts 112) of the 150-request M6 budget.
-5. gitleaks full history and staged scan: no leaks found (verbatim in `reports/M5.md`).
-6. `docs/FACTS.md` is new; every row cites a source file or run URL.
-7. **M6.10 CI fix round (2026-11-05):**
-   - CI run `41846563160` on `d3afa78` failed unit job: `tests/test_release_env.py` expected 8 keys, now 12.
-   - Fix: `tests/test_release_env.py` updated to 12-key expected list (original 8 + 4 calibrated demo keys). Passes locally (`1 passed`).
-   - Full unit suite (`pytest -q` with `PYTHONPATH=.`): 1 failure in `test_query_log_failure_is_swallowed_and_leaks_no_text` — pre-existing local-only failure (CI green). `caplog.text` empty while log emitted as JSON to stderr. Diagnostic: `.env` presence not the cause (fails with/without).
-   - Ruff: 1 UP038 error (`isinstance(value, (int, float))` valid on Python 3.12, flagged on 3.14), 2 format changes (`redact.py`, `test_contract.py`). Version skew, not M6.10.
-   - Querylog.py f-string change (commit `6631dbd`) reverted (`a300a46`): A/B test on `950f704` showed identical failure; f-string neither caused nor fixed it.
-   - Net diff since `950f704`: `tests/test_release_env.py` +4 lines (12-key list). Querylog.py unchanged.
+1. Next milestone: M8 (§10) — service-level evaluation with the real provider (≤100 requests), capacity model, held-out manifest, clean-clone rehearsal, review pack. M8's PASS closes Project 7.
+2. M7 was completed by the manager after the free-model executor sessions failed (wrong directory, invented commits in a scratch repo — no harm; verified). The executor route stays suspended; see reports/M7.md "Execution note".
+3. Known local-only test artifact: `test_query_log_failure_is_swallowed_and_leaks_no_text` can fail under local Windows pytest log capture; green in CI. Not M7-caused.
+4. Deferred, non-blocking: manager's hands-on local re-runs for M3–M6 (deferred while laptop SSH was down; SSH restored 2026-11-05). [H10] metrics-token live check remains optional.
 
 ## Uncommitted (not this round)
-- `evaluation/results/retrieval-local.json` — pre-existing untracked, not part of A1.
+- `evaluation/results/retrieval-local.json` — pre-existing untracked, never part of a milestone.

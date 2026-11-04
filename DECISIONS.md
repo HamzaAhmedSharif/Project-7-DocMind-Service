@@ -365,3 +365,61 @@ Notes are recorded in the milestone sections below.
 - Tradeoff accepted: the CI smoke now depends on the admin CLI and a throwaway key in the throwaway CI database; the key is created per run and never stored. The ephemeral smoke was not simulated locally: it runs in CI against Neon and the hosted provider. Its sample-question citation check is the only live-run uncertainty (M6 prompt v2/`REQUIRE_CITATION=true`); it was left unchanged because it still asserts the M6 contract, not a pre-M6 expectation.
 - Evidence: local compose reproduction (`docker compose -f deploy/compose.ci.yml up -d --build --wait` + admin create-key + `python scripts/smoke_http.py --base http://127.0.0.1:8000 --mode ci --api-key-env DOCMIND_SMOKE_KEY`) → 14 checks, `ok=True`, all PASS; re-ran after the ephemeral alignment → same 14/14; `pytest -q` 224 passed, 18 deselected; `ruff check` and `ruff format --check` clean; `.github/workflows/ci.yml` Container smoke step updated. Read 2026-11-04.
 - Would revisit if: the CI compose stack stops providing the admin CLI, or M6.2's capability rule changes.
+
+## M7 - metrics, dashboards, load tests, runbook (2026-11-05)
+
+### Decision: metrics design and the cardinality rule
+- Context: M7.1 requires Prometheus metrics whose labels come only from fixed small sets; a scrape must never touch the database (it would wake a scaled-to-zero Neon) and never carry user text, document ids, request ids, key prefixes or tenant ids.
+- Chosen: `docmind_service/metrics.py` on prometheus-client with a dedicated registry. `docmind_http_requests_total{method, route, status}` uses the route TEMPLATE (`/v1/query`, `/v1/documents/{document_id}`) or `other`, so random 404 paths add at most one series (tested with 100 random paths). `docmind_query_total{outcome, principal}` counts outcomes (`answered`, `cache_hit`, `refused_no_evidence`, `refused_low_evidence`, `refused_ungrounded`, `blocked_output`, `provider_error`, `retrieval_error`, `rate_limited`, `cap_reached`) with `principal` = `anonymous`|`keyed` only. Pool gauges are read from in-process pool statistics at scrape time; no SQL at scrape. A unique-string test proves a question word, a document filename and a key never appear in the exposition.
+- Rejected: per-tenant or per-key labels (unbounded cardinality and a privacy leak); scraping the database for counters (wakes Neon, couples monitoring to the thing it monitors).
+- Tradeoff accepted: tenant-level diagnosis is impossible from metrics alone; the redacted query log is the per-tenant record.
+- Would revisit if: a multi-instance deployment needs tenant-level alerting (then aggregate offline, not via labels).
+
+### Decision: /metrics access rule
+- Context: metrics reveal traffic shape and build identity; the release runs with no persistent host (Amendment A1), so the rule must be safe by default in prod and frictionless in dev.
+- Chosen: prod + no `DOCMIND_METRICS_TOKEN` -> 404 (feature off, indistinguishable from a missing route); token set in any environment -> Bearer required, constant-time compare, 401 otherwise; dev/test + no token -> open. `GET /metrics` is excluded from the OpenAPI schema.
+- Rejected: IP allowlists (the release path has no stable operator IP); basic auth (a second credential shape to rotate).
+- Tradeoff accepted: in prod with a token set, a scrape failure looks like an auth problem, not a metrics problem; the runbook's incident table says so.
+- Would revisit if: a hosted deployment adds platform-level private networking for scrapes.
+
+### Decision: prometheus-client dependency and its cost
+- Context: M7.1 adds one runtime dependency. M4 recorded the pre-M7 image at 987,185,947 bytes with 202.4 MB idle memory (`evaluation/results/m4-container.json`).
+- Chosen: `prometheus_client` pinned in `requirements.txt`, lock refreshed. Measured cost: image 988,656,797 bytes (delta +1,470,850 vs M4); idle memory of the M7 container ≈ 204 MiB vs 202.4 MB at M4.
+- Rejected: hand-rolling the exposition format (the drift test and histogram buckets are exactly where hand-rolled formats rot).
+- Tradeoff accepted: one more dependency to keep patched (Dependabot covers it).
+- Would revisit if: the image-size or idle-memory delta grows materially on a future bump.
+
+### Decision: load tool in the standard library, and the two profiles
+- Context: M7.3's tool must run anywhere the repo runs, with no new dependency; the free-tier shape it must predict is Render's published 512 MB / fractional-CPU instance (Amendment A1: no live load test is possible or allowed).
+- Chosen: `scripts/loadtest.py` uses only `threading`, `urllib`, `time`, `statistics`, `json`. Profiles: `unconstrained` = `--memory 512m`; `render-like` = `--memory 512m --cpus 0.1`. The matrix (mixed scenario, 60 s runs, 10 s pauses) covers both profiles; an answered-only cache run and a 10-minute soak complete the record in `evaluation/results/load-m7.json`.
+- Rejected: locust/k6 (new dependencies for a one-off measurement); testing against the release-smoke environment (rate-limited by design; would burn the shared provider budget and measure Neon's network, not the service).
+- Tradeoff accepted: render-like is a local approximation of the free instance, labelled as such wherever its numbers are quoted.
+- Would revisit if: a persistent host is ever adopted (then one bounded live confirmation run, never a matrix).
+
+### Decision: what the matrix found, and the harness fixes applied first
+- Context: manager verification of the executor's first load run found the run had measured the rate limiter, not the service: the harness did not pass the M7.3 application load settings, so 34,501 requests in 60.0 s were answered 429 by the default demo per-IP cap (5/min) and the run's status counts came back empty. Three tool defects caused it: (1) `scripts/run_load_m7.py` started the container without `DOCMIND_DEMO_IP_PER_MIN`/`DOCMIND_DEMO_DAILY_CAP`/`DOCMIND_GLOBAL_DAILY_LLM_CAP` raised and with the cache on; (2) its 5xx scrape parsed `docmind_query_total` expecting a `status` label that the M7.1 design does not emit — the counts live on `docmind_http_requests_total{route, status}`; (3) `scripts/loadtest.py` masked HTTP error statuses as client timeouts (blanket `except` around `urlopen`, which raises `HTTPError` for 4xx/5xx) and ended the run when its fixed question pool drained (0.59 s for the nominal 60 s run).
+- Chosen: fix the tools, then measure. loadtest gained an `HTTPError` branch (real statuses recorded) and a sustaining closed loop (top-up to the configured concurrency until the duration elapses); run_load passes the M7.3 settings with the cache off and counts 5xx from `docmind_http_requests_total` for `route="/v1/query"`; the demo corpus was ingested into the local database (3 documents / 639 chunks as tenant `public`, alongside 2 one-chunk drill leftovers) so the answered path is real. The repaired single run at concurrency 10: 6,755 requests, all 200, 0 timeouts, p95 0.109 s, peak 210.6 MB; the full matrix followed (next entry).
+- Rejected: accepting the first run's gates (L1 printed PASS over an empty scrape — a gate computed from no evidence); patching the JSON by hand.
+- Tradeoff accepted: the milestone record keeps the void run in this entry rather than deleting it; `load-m7.json` holds only the post-fix measurements.
+- Would revisit if: the harness changes again (any future edit re-runs the c10 validation before a matrix).
+
+### Decision: dashboards as code with a drift test
+- Context: a dashboard that names a metric the app no longer emits fails silently at the worst time.
+- Chosen: the Grafana dashboard is a committed JSON (uid `docmind`, 11 panels) with provisioning as code under `deploy/observability/`; `tests/test_dashboard.py` parses every panel query and asserts each `docmind_*`/`process_*` name exists in the app's exposition (on Windows the process collector is a no-op without /proc, so the test skips `process_*` names there; CI on Linux arbitrates).
+- Rejected: click-built dashboards exported after the fact (unreviewable diffs, no drift guard).
+- Tradeoff accepted: panel edits go through code review and the drift test, not the Grafana UI.
+- Would revisit if: the stack moves to a hosted Grafana with its own provisioning.
+
+### Decision: drill findings — one real bug, fixed; drills isolated from the shared counter
+- Context: M7.4 verifies the behaviors the runbook claims. Drill 1 (database stopped) failed on its first run: `POST /v1/query` returned **500** with no outcome counted, where the spec requires a 503 problem with `Retry-After` and a `retrieval_error` outcome. Root cause: `PgStore.retrieve` translates psycopg failures into `RetrievalError`, but the query route touches the database earlier — the semantic cache (`lookup`/`purge`) and `PgStore.get_corpus_version` — and those paths raised raw psycopg errors outside the route's error mapping. Separately, drills 2 and 3 were first measured against the shared local database, whose Postgres-backed daily counter the day's earlier runs had already spent (the counter is database-persisted, not per-process), so both drills reported `daily_cap_reached` regardless of their own settings.
+- Chosen: fix at the component boundary, mirroring the store's existing pattern — `SemanticCache` wraps its pool operations in a `_db_errors()` translator and `get_corpus_version` raises `RetrievalError` on `(psycopg.Error, PoolTimeout)`; the route additionally counts the `retrieval_error` outcome for failures on the cache path. Regression tests in `tests/test_db_down.py` pin all three translations. Drills 2, 3 and 5 were re-run against an isolated drill database with a zeroed counter and the corpus ingested (drill 3 at the release evidence threshold 0.52). After the fix: drill 1 = 503 + `Retry-After: 30` + `retrieval_error`, recovery 2.3 s after the database restarted; drill 2 = 503 `provider_error`; drill 3 = 200 answered, then 429 `daily_cap_reached` with `Retry-After`, refusal still 200; drill 4 cold start 1.69/1.77 s; drill 5 = 413/422/422/422. Suite after the fix: 248 passed.
+- Rejected: catching psycopg exceptions in the HTTP route (leaks storage details into the web layer; every future caller of the cache would need the same catch); resetting the shared database's counter for the drills (corrupts the accounting of every other run that shares it).
+- Tradeoff accepted: `SemanticCache.store` now also raises `RetrievalError` on a database failure, so an answer computed while the database dies mid-request returns 503 instead of the answer — an honest failure over a silently uncached success.
+- Would revisit if: a second storage backend appears (then the translation belongs behind a store/cache interface, not per-component).
+
+### Decision: no live load test
+- Context: section 9 forbids load-testing the live free-tier service: it is rate-limited by design and shares the 800/day provider budget.
+- Chosen: all load evidence is local against the release-class image with the fake provider; the release path itself is exercised only by the 1-request release-smoke. Provider requests in M7: 0.
+- Rejected: a "small" live load run (there is no small version of a 60-second concurrency-10 test against a 5/min limiter).
+- Tradeoff accepted: live latency under load stays unmeasured; the capacity model (M8) is built from the local matrix and says so.
+- Would revisit if: a paid or self-hosted instance exists.

@@ -81,3 +81,215 @@ The release image is `ghcr.io/hamzaahmedsharif/docmind-service:sha-<7-char-commi
 - Uses the same `release-smoke` environment secrets; same bare `-e NAME` forwarding.
 - The last seed (2026-11-04) created 3 documents / 639 chunks; database 7896 kB -> 11 MB; demo-check top-3 results identical to the local reference file.
 
+
+## M7 — Running, monitoring and repairing the service
+
+### Overview and endpoints
+
+DocMind Service is a single FastAPI application (one container, one
+process). Public surface:
+
+| Endpoint | Auth | Notes |
+|---|---|---|
+| `GET /` | none | Landing page |
+| `GET /healthz` | none | Liveness; never touches the database |
+| `GET /readyz` | none | Readiness; checks the database pool |
+| `POST /v1/query` | anonymous (demo limits) or API key | Answers with citations or a refusal |
+| `GET /v1/documents` | anonymous lists the `public` tenant; keyed lists own tenant | |
+| `POST /v1/documents` | API key with `write` scope, uploads enabled | Anonymous writes are 403 |
+| `DELETE /v1/documents/{id}` | API key with `write` scope | Own tenant only |
+| `GET /metrics` | see the access rule below | Prometheus exposition; never touches the database |
+
+### How to run locally
+
+Observability stack (app + Postgres + Prometheus + Grafana, all ports
+bound to 127.0.0.1):
+
+```
+docker compose -f deploy/observability/compose.yml up --build
+```
+
+Grafana is at `http://127.0.0.1:3000` with the distribution's default
+admin credentials. That is acceptable **only** because every published
+port is bound to 127.0.0.1; never rebind Grafana or Prometheus to a
+shared interface without changing the credentials first. Prometheus
+scrapes `app:8000/metrics` every 5 seconds; the dashboard `DocMind
+Service` (uid `docmind`) is provisioned from
+`deploy/observability/dashboards/docmind.json`.
+
+Plain Docker (release image): see "How to run the release image" above.
+
+### Settings (every `Settings` field)
+
+Environment variables carry the `DOCMIND_` prefix. Secret values are
+never printed, logged or committed.
+
+| Setting | Default | Secret | Meaning |
+|---|---|---|---|
+| `environment` | `dev` | no | `dev`, `test` or `prod`; prod tightens the `/metrics` rule |
+| `log_level` | `INFO` | no | JSON log level |
+| `default_top_k` | 10 | no | Retrieval depth per query |
+| `max_upload_mb` | 10 | no | Upload size limit (oversize → 413) |
+| `max_pages` | 200 | no | Per-document page limit |
+| `default_mode` | `single` | no | Query orchestration mode |
+| `database_url` | — | yes | Pooled Postgres connection string |
+| `database_url_direct` | — | yes | Direct Postgres connection string (migrations) |
+| `auto_migrate` | false | no | Apply SQL migrations at startup |
+| `llm_provider` | `fake` | no | `fake` (offline) or `hosted` |
+| `llm_base_url` | `https://api.groq.com/openai/v1` | no | OpenAI-compatible endpoint |
+| `llm_model` | `openai/gpt-oss-120b` | no | Hosted model id |
+| `llm_api_key` | — | yes | Hosted provider key |
+| `llm_reasoning_effort` | `low` | no | Reasoning effort hint |
+| `llm_max_completion_tokens` | 1024 | no | Completion token ceiling |
+| `llm_max_wait_seconds` | 20 | no | Max provider queue wait before shedding |
+| `hosted_rpm` | 20 | no | Provider requests/minute pacing (90% buckets) |
+| `hosted_tpm` | 8000 | no | Provider tokens/minute pacing (90% buckets) |
+| `embedding_model` | `sentence-transformers/all-MiniLM-L6-v2` | no | ONNX embedding model |
+| `model_cache_dir` | — | no | fastembed model cache location |
+| `git_sha` | — | no | Commit baked into the image at build time |
+| `uploads_enabled` | true | no | Master switch for upload/delete (release: false) |
+| `demo_daily_cap` | 300 | no | Anonymous questions per UTC day |
+| `demo_ip_per_min` | 5 | no | Anonymous questions per minute per IP |
+| `trust_proxy_hops` | 0 | no | Proxies in front of the app (client-IP derivation) |
+| `auth_cache_seconds` | 60 | no | API-key lookup cache |
+| `key_rpm` | 30 | no | Per-key requests per minute |
+| `key_daily_queries` | 200 | no | Per-key questions per UTC day |
+| `key_max_documents` | 20 | no | Per-key document quota (403 `quota_exceeded`) |
+| `key_max_pages` | 500 | no | Per-key page quota (403 `quota_exceeded`) |
+| `global_daily_llm_cap` | 800 | no | All-tenant provider calls per UTC day |
+| `metrics_token` | — | yes | Bearer token for `/metrics` when set |
+| `guardrails_enabled` | true | no | Prompt-injection guardrails (prompt v2) |
+| `require_citation` | true | no | Refuse answers without a valid citation |
+| `canary` | — | yes | Guardrail canary string (never logged) |
+| `max_answer_chars` | 4000 | no | Answer truncation limit |
+| `evidence_min_score` | 0.2 | no | Evidence gate (release demo value: 0.52, calibrated) |
+| `cache_enabled` | true | no | Semantic cache master switch |
+| `cache_threshold` | 0.86 | no | Cache similarity threshold (calibrated, C1) |
+| `cache_ttl_days` | 30 | no | Semantic cache entry lifetime |
+| `query_log_days` | 30 | no | Redacted demo query-log retention |
+
+### The `/metrics` access rule
+
+- `environment=prod` and no `metrics_token` set → **404** (feature off).
+- `metrics_token` set (any environment) → `Authorization: Bearer
+  <token>` required (constant-time compare); anything else → **401**.
+- dev/test with no token → open (local dashboards and tests).
+
+A scrape never touches the database: pool gauges are read from the
+in-process pool statistics, so scraping cannot wake a scaled-to-zero
+Neon instance.
+
+### Free-tier behavior
+
+- Neon scales to zero after 5 minutes idle; the pooled connection
+  string reconnects on the next database-touching request. `/healthz`
+  does not touch the database, so health checks never wake it.
+- The per-IP rate-limit window is per-process in-memory state; a
+  restart resets it. The **daily cap is Postgres-backed**
+  (`usage_daily`, one row per UTC day and scope) and is therefore
+  shared across processes and restarts — every instance pointed at the
+  same database spends from the same counter. The cap is incremented
+  *before* the provider call, so a failed provider call still spends
+  budget (by design: it prevents retry storms against a dead
+  provider).
+- There is no persistent public host (Amendment A1): the release image
+  is verified by the `release-smoke` workflow under a 512 MB limit
+  against Neon after every green `main` CI run. No scheduled pings are
+  used anywhere.
+
+### Budget accounting
+
+Provider requests are counted per UTC day across everything that uses
+the key: the release-smoke (at most 1 per run), local measurement runs
+and any live check. The combined ceiling is 800/day
+(`global_daily_llm_cap`); M8's service evaluation has its own budget
+of at most 100 requests (at most 60 per UTC day). Check the ledger
+before and after any provider run:
+
+```
+python scripts/provider_budget.py --used-today <successful local calls>
+```
+
+### Monitoring — what the dashboard panels mean
+
+- **Request rate by route** — `docmind_http_requests_total` rate; a
+  spike on `/v1/query` with flat outcomes means refusals or errors.
+- **p50/p95 latency of `/v1/query`** — retrieval + provider time;
+  the p95 panel separates the retrieval path from provider wait.
+- **Responses by status class** — 429 growth = caps; 5xx growth = the
+  incident table below.
+- **Query outcomes (stacked)** — answered vs `cache_hit` vs each
+  refusal kind; a rising `refused_low_evidence` share after an ingest
+  change means the corpus or threshold moved.
+- **Cache hit ratio** — hits / (hits + misses); a collapse after a
+  deploy points at a corpus-version or threshold change.
+- **Provider tokens per minute** — against the 8,000/min limit with a
+  constant line at 7,200 (the 90% pacing rule).
+- **Provider wait time p95** — queueing inside the pacing buckets;
+  sustained growth precedes load shedding (`docmind_llm_shed_total`).
+- **Guardrail events** — canary hits, invalid citations removed, URLs
+  and images stripped, truncations, ungrounded blocks.
+- **Database pool state** — size / available / waiting; waiting > 0
+  under load means the pool is the bottleneck.
+- **Resident memory** — against the 512 MB line; the M7 load record
+  (below) peaked at 225.8 MB under the gate profile.
+- **Provider calls in the last 24 h** — `increase()` of the calls
+  counter; reconcile with the budget ledger.
+
+### Incident table
+
+| Symptom | Likely cause | Check | Action |
+|---|---|---|---|
+| 503 with `Retry-After` on queries | Database down, or provider down/shed | `/readyz`; `docmind_db_errors_total`; provider wait panel | Restore the database (service recovers without a restart — drill 1); for the provider, wait or rotate the key |
+| 429 `daily_cap_reached` | Global or per-IP daily cap reached | Query-outcome panel (`cap_reached`, `rate_limited`) | Expected behavior; caps reset at UTC midnight; do not raise caps on the release config |
+| Slow first request | Cold process: model load + first embed | Startup logs; compare with the cold-start drill | Expected once per process start; warm requests are the measured path |
+| `/readyz` 503 | Database unreachable | `docker ps` / Neon console; pool gauges | Restart the database; the app recovers on its own (drill 1) |
+| Memory restarts (OOM) | Container over its 512 MB limit | `docker inspect` OOMKilled; memory panel vs the M7 peak | Check for an upload or corpus change; the M4.8 memory ladder applies |
+| Stuck deploy | CI or release-smoke red | GitHub Actions logs for `ci` then `release-smoke` | Fix forward on `main`; the smoke re-runs on the next green CI |
+| G8 failing | Release image behavior changed | `release-smoke` run log (DSNs redacted) | Reproduce locally with the release image and `deploy/release.env` |
+| Suspected leaked secret | Key or DSN in a log, screenshot or commit | `gitleaks` over history | Rotate first (below), then purge; never rewrite history silently |
+
+### Rotate each secret
+
+Groq key, Neon password and `METRICS_TOKEN` follow the five steps in
+"Rotate each secret" above. API keys for tenants are rotated with the
+admin CLI: `python -m docmind_service.admin create-key --tenant <t>
+--label <l> --write` issues a new key (shown once); revoke the old one
+with the admin CLI afterwards.
+
+### Failure drills (verified locally on 2026-11-05)
+
+Drills ran against the release image under `-m 512m`; drills 2, 3 and
+5 used an isolated drill database, because the daily counter is
+Postgres-backed and shared (see Free-tier behavior).
+
+| # | Drill | Observed |
+|---|---|---|
+| 1 | Database stopped | `/healthz` 200, `/readyz` 503, `/v1/query` **503 with `Retry-After: 30`**, outcome `retrieval_error`; service recovered 2.3 s after the database restarted, no app restart. The drill's first run exposed a 500 here (the cache path did not translate database errors); fixed in this milestone with regression tests (`tests/test_db_down.py`). |
+| 2 | Provider unreachable (hosted, dead base URL) | `/v1/query` **503**, outcome `provider_error`. |
+| 3 | Daily cap = 1, release evidence threshold | First query 200 answered; second provider-needing query **429 `daily_cap_reached` with `Retry-After`** (seconds to UTC midnight); a low-evidence question still refused 200 without a provider call. |
+| 4 | Cold start | `/healthz` 1.69 s, `/readyz` 1.77 s. |
+| 5 | Uploads: 11 MB / not-a-PDF / fake-encrypted / empty (keyed) | **413 / 422 / 422 / 422**; memory after 204.7 MiB. |
+
+### Load record (M7.3)
+
+102,937 requests across the matrix (unconstrained and render-like
+profiles, mixed and answered workloads, plus a 600 s soak): every run
+HTTP 200, zero timeouts, zero OOM kills. Headline unconstrained c10
+mixed: 113.6 rps at p95 0.107 s. Soak memory stayed flat: 208.4 MB at
+one minute → 208.1 MB at the end.
+
+Full per-run data: `evaluation/results/load-m7.json`. Gates: L1
+(5xx + OOM at concurrency ≤ 10 under 512 MB) = 0; MEM (peak RSS)
+= 225.8 MB against the 480 MB threshold.
+
+### Known limits
+
+- Single instance only: the per-IP limiter is in-process and resets on
+  restart; Prometheus counters are per process. (The daily cap is
+  Postgres-backed — see Free-tier behavior.)
+- Query-log redaction is regex-based; novel PII formats can slip
+  through (see `docs/SECURITY.md`).
+- No availability promise is made: the only service levels stated are
+  measured numbers with their conditions (this file and
+  `docs/FACTS.md`).
