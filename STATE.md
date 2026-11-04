@@ -1,7 +1,7 @@
 # STATE
-Updated: 2026-11-04 12:30 UTC
-Current milestone: M6 · complete including M6.10 live key verification (local, per Amendment A1)
-Last commit: 6b51212 docs: record M6 provider measurements (no-citation, red-team R1) and ledger (local)
+Updated: 2026-11-05 14:00 UTC
+Current milestone: M6 · complete including M6.10 live key verification (local, per Amendment A1) + CI fix round
+Last commit: a300a46 revert: restore querylog warning formatting
 Last pushed head: c149900 · origin/main; M6 commits are local and not pushed
 Evidence branch: evidence/bad-chunking at 427d2c5 (unmerged)
 
@@ -14,7 +14,7 @@ Evidence branch: evidence/bad-chunking at 427d2c5 (unmerged)
 | M3 | done (manager released M4) | reports/M3.md | 1538e20 (M3c) + FIX commits 992ee80 | 2026-11-03 |
 | M4 | built, pushed to origin/main; manager verdict not recorded | reports/M4.md | beb6731, e1b816d, 123e697, ca18652, f4ecd92 | 2026-11-03 |
 | M5 | G8-C green; documents round complete; awaiting manager verdict | reports/M5.md | c149900 (pushed) + docs round (local) | 2026-11-04 |
-| M6 | complete incl. M6.10 live key verification (local, per Amendment A1) | reports/M6.md | d62681d, a173df0, 66b87ea + measurement commit (local) + M6.10 local verification (local) | 2026-11-04 |
+| M6 | complete incl. M6.10 live key verification (local, per Amendment A1) + CI fix round | reports/M6.md | d62681d, a173df0, 66b87ea + measurement commit (local) + M6.10 local verification (local) + CI fix round | 2026-11-05 |
 
 ## M5 verification (Amendment A1)
 - **G8-C:** release-smoke run 41809139449 (manual dispatch, head `c149900`), 9/9 PASS — https://github.com/HamzaAhmedSharif/Project-7-DocMind-Service/actions/runs/41809139449.
@@ -59,6 +59,13 @@ Evidence branch: evidence/bad-chunking at 427d2c5 (unmerged)
 4. Provider budget: `used_today=76`, upper bound 80 of 800; M6-round calls 75 (attempts 112) of the 150-request M6 budget.
 5. gitleaks full history and staged scan: no leaks found (verbatim in `reports/M5.md`).
 6. `docs/FACTS.md` is new; every row cites a source file or run URL.
+7. **M6.10 CI fix round (2026-11-05):**
+   - CI run `41846563160` on `d3afa78` failed unit job: `tests/test_release_env.py` expected 8 keys, now 12.
+   - Fix: `tests/test_release_env.py` updated to 12-key expected list (original 8 + 4 calibrated demo keys). Passes locally (`1 passed`).
+   - Full unit suite (`pytest -q` with `PYTHONPATH=.`): 1 failure in `test_query_log_failure_is_swallowed_and_leaks_no_text` — pre-existing local-only failure (CI green). `caplog.text` empty while log emitted as JSON to stderr. Diagnostic: `.env` presence not the cause (fails with/without).
+   - Ruff: 1 UP038 error (`isinstance(value, (int, float))` valid on Python 3.12, flagged on 3.14), 2 format changes (`redact.py`, `test_contract.py`). Version skew, not M6.10.
+   - Querylog.py f-string change (commit `6631dbd`) reverted (`a300a46`): A/B test on `950f704` showed identical failure; f-string neither caused nor fixed it.
+   - Net diff since `950f704`: `tests/test_release_env.py` +4 lines (12-key list). Querylog.py unchanged.
 
 ## Uncommitted (not this round)
 - `evaluation/results/retrieval-local.json` — pre-existing untracked, not part of A1.
