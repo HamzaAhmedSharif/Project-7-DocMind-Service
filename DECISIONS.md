@@ -273,3 +273,10 @@ Notes are recorded in the milestone sections below.
 - The `# syntax=docker/dockerfile:1` frontend line was removed from the Dockerfile: that frontend image resolves through Docker Hub at build time and the build failed while the registry was unreachable; no dockerfile-1.x feature is used. `FROM python:3.12-slim-bookworm` is pinned by tag and by the recorded digest.
 - The pinned actionlint 1.7.7 binary was downloaded through WSL (`curl` in Ubuntu) because the Windows HTTP client could not reach the GitHub release CDN at that moment; the zip was verified against the official SHA-256 (`7f12f180…`) before extraction.
 - Lesson: retry direct registries before recording a mirror as required; check both mirrors' digests when a mirror is unavoidable.
+
+### Note: the release image carries its commit in DOCMIND_GIT_SHA (2026-11-04)
+- Context: with the persistent host retired, nothing told `/healthz` which commit the image ran; the only source was the host-set `RENDER_GIT_COMMIT` fallback.
+- Chosen: Dockerfile `ARG GIT_SHA=` and `ENV DOCMIND_GIT_SHA=$GIT_SHA` after the model-baking layer; Settings maps an empty value to `None`. Evidence: `docker build --build-arg GIT_SHA=deadbeef --label org.opencontainers.image.revision=deadbeef -t t1 .` -> `/healthz` `{"status":"ok","version":"0.1.0","commit":"deadbeef"}` and label `deadbeef`; a build without the argument -> `/healthz` `{"status":"ok","version":"0.1.0","commit":null}`.
+- Rejected: injecting the commit at run time (would make "commit equals pushed commit" a tautology); reading the label at runtime (the app would need Docker access).
+- Tradeoff accepted: changing the build arg invalidates the layers after it; the model layer stays cached.
+- Would revisit if: the image is built by a system that cannot pass build args.

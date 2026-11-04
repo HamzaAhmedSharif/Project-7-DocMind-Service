@@ -6,6 +6,8 @@ COPY requirements.lock .
 RUN pip install -r requirements.lock
 ARG HF_ENDPOINT
 RUN python -c "from fastembed import TextEmbedding; TextEmbedding('sentence-transformers/all-MiniLM-L6-v2', cache_dir='/opt/models')"
+ARG GIT_SHA=
+ENV DOCMIND_GIT_SHA=$GIT_SHA
 COPY docmind_service ./docmind_service
 RUN useradd --system --uid 10001 app && chown -R app /opt/models
 USER app

@@ -146,6 +146,6 @@ jobs:
         with: {registry: ghcr.io, username: "${{ github.actor }}", password: "${{ secrets.GITHUB_TOKEN }}"}
       - run: |
           IMAGE=ghcr.io/$(echo "${{ github.repository_owner }}" | tr 'A-Z' 'a-z')/docmind-service
-          docker build --label org.opencontainers.image.source=https://github.com/${{ github.repository }} -t "$IMAGE:sha-${GITHUB_SHA::7}" -t "$IMAGE:latest" .
+          docker build --build-arg GIT_SHA=${GITHUB_SHA} --label org.opencontainers.image.revision=${GITHUB_SHA} --label org.opencontainers.image.source=https://github.com/${{ github.repository }} -t "$IMAGE:sha-${GITHUB_SHA::7}" -t "$IMAGE:latest" .
           docker push "$IMAGE:sha-${GITHUB_SHA::7}"
           docker push "$IMAGE:latest"

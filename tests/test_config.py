@@ -31,3 +31,10 @@ def test_secret_values_are_not_in_the_settings_string(monkeypatch):
     assert settings.llm_api_key_value == "UNIQUE-SECRET-12345"
     assert "UNIQUE-SECRET-12345" not in str(settings)
     assert "UNIQUE-SECRET-12345" not in repr(settings)
+
+
+def test_empty_git_sha_reads_as_no_commit(monkeypatch):
+    monkeypatch.delenv("RENDER_GIT_COMMIT", raising=False)
+    assert Settings(_env_file=None, git_sha="").commit_sha is None
+    assert Settings(_env_file=None, git_sha="   ").commit_sha is None
+    assert Settings(_env_file=None, git_sha="deadbeef").commit_sha == "deadbeef"
