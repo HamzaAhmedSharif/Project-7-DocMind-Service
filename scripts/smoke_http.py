@@ -378,7 +378,8 @@ def run_ephemeral(smoke: Smoke, args: argparse.Namespace) -> None:
         status == 200
         and bool(answer)
         and answer.get("refused") is True
-        and answer.get("refusal_reason") == "no_evidence"
+        and answer.get("refusal_reason") == "low_evidence"
+        and answer.get("citations") == []
         and usage.get("calls") == 0,
         f"status={status} refused={(answer or {}).get('refused')} "
         f"reason={(answer or {}).get('refusal_reason')} calls={usage.get('calls')}",
