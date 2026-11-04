@@ -107,9 +107,9 @@ class Smoke:
         else:
             print(f"PASS {name}")
 
-    def request(self, method: str, path: str, body=None, headers=None):
+    def request(self, method: str, path: str, body=None, headers=None, auth: bool = True):
         headers = dict(headers or {})
-        if self.api_key:
+        if self.api_key and auth:
             headers["X-API-Key"] = self.api_key
         req = urllib.request.Request(self.base + path, data=body, method=method, headers=headers)
         try:
@@ -133,8 +133,8 @@ class Smoke:
         preview = body[:200].decode("utf-8", "replace") if isinstance(body, bytes) else ""
         self.record(name, False, f"{reason} (last status={status}, body={preview!r})")
 
-    def get_json(self, method: str, path: str, body=None, headers=None):
-        status, header, raw = self.request(method, path, body, headers)
+    def get_json(self, method: str, path: str, body=None, headers=None, auth: bool = True):
+        status, header, raw = self.request(method, path, body, headers, auth)
         try:
             parsed = json.loads(raw)
         except (ValueError, UnicodeDecodeError):
@@ -154,7 +154,15 @@ def run_ci(smoke: Smoke) -> None:
     smoke.poll("/healthz has version", "/healthz", _has_version, "missing version")
     smoke.poll("/readyz 200", "/readyz", lambda s, h, b: s == 200, "service not ready")
 
+    # --- anonymous upload must return 403 (M6: anonymous cannot write) ---
     pdf = make_pdf([PDF_TEXT])
+    body, ctype = multipart("smoke.pdf", pdf)
+    status, _, _ = smoke.get_json(
+        "POST", "/v1/documents", body, {"Content-Type": ctype}, auth=False
+    )
+    smoke.record("anonymous upload 403", status == 403, f"status={status}")
+
+    # --- keyed upload / CRUD flow (requires write-scoped key) ---
     body, ctype = multipart("smoke.pdf", pdf)
     status, _, doc = smoke.get_json("POST", "/v1/documents", body, {"Content-Type": ctype})
     same_id = bool(doc) and doc.get("document_id")
@@ -198,8 +206,8 @@ def run_ci(smoke: Smoke) -> None:
         f"status={status} answer={answer} header={_header(header, 'X-Request-ID')}",
     )
 
-    # M6 adds a relevance floor; until then nonsense text still retrieves the one
-    # chunk, so the no-evidence path is exercised with a document filter that matches nothing.
+    # M6 guardrails filter chunks below the relevance floor, so a filter that
+    # matches nothing returns low_evidence; assert the exact M6 reason.
     qbody = json.dumps(
         {"question": NO_EVIDENCE_QUESTION, "document_ids": [str(uuid.uuid4())]}
     ).encode()
@@ -212,7 +220,8 @@ def run_ci(smoke: Smoke) -> None:
         status == 200
         and bool(answer)
         and answer.get("refused") is True
-        and answer.get("refusal_reason") == "no_evidence"
+        and answer.get("refusal_reason") == "low_evidence"
+        and answer.get("citations") == []
         and usage.get("calls") == 0,
         f"status={status} answer={answer}",
     )
