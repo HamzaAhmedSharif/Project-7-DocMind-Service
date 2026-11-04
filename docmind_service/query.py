@@ -9,6 +9,8 @@ NO_EVIDENCE_ANSWER = "I could not find relevant information in the indexed docum
 # M6 makes this a measured setting; M5 needs nonsense questions to refuse.
 MIN_EVIDENCE_SCORE = 0.2
 _CITATION = re.compile(r"[\[【](c\d+)[\]】]")
+# gpt-oss emits zero-width spaces inside citation brackets, e.g. "[\u200bc1]".
+_ZERO_WIDTH = re.compile("[\u200b\u200c\u200d\u2060\ufeff]")
 
 PROMPT_TEMPLATE = """Answer the question using only the context below. If the context does not \
 contain the answer, say so clearly.
@@ -50,7 +52,7 @@ def parse_citations(
     cited: list[RetrievedChunk] = []
     seen: set[str] = set()
     invalid = 0
-    for short in _CITATION.findall(answer):
+    for short in _CITATION.findall(_ZERO_WIDTH.sub("", answer)):
         if short in seen:
             continue
         seen.add(short)

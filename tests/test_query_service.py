@@ -48,6 +48,13 @@ def test_parse_citations_accepts_full_width_brackets():
     assert invalid == 0
 
 
+def test_parse_citations_ignores_zero_width_characters():
+    _, mapping = build_prompt("q", [chunk(1), chunk(2)])
+    cited, invalid = parse_citations("Answer [\u200bc2] and [\u200dc1].", mapping)
+    assert [c.chunk_id for c in cited] == ["x:2", "x:1"]
+    assert invalid == 0
+
+
 def test_parse_citations_counts_unknown_ids_and_ignores_duplicates():
     _, mapping = build_prompt("q", [chunk(1)])
     cited, invalid = parse_citations("[c1] again [c1] and [c9]", mapping)
