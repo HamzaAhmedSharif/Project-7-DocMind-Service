@@ -1,0 +1,50 @@
+name: neon-seed
+
+# Manual one-off: run the Master Script M5.5 sequence against production
+# Neon from CI, using the release-smoke environment secrets. The laptop
+# .env.neon copies proved unreliable, so the values never leave GitHub.
+# workflow_dispatch only: never on push or pull_request.
+
+on:
+  workflow_dispatch:
+
+permissions:
+  contents: read
+
+jobs:
+  seed:
+    runs-on: ubuntu-latest
+    environment: release-smoke
+    steps:
+      - uses: actions/checkout@11d5960a326750d5838078e36cf38b85af677262
+      - uses: actions/setup-python@a26af69be951a213d495a4c3e4e4022e16d87065
+        with:
+          python-version: "3.12"
+      - name: Install dependencies
+        run: pip install -r requirements.lock
+      - name: Write .env.neon from environment secrets
+        env:
+          DOCMIND_DATABASE_URL: ${{ secrets.DOCMIND_DATABASE_URL }}
+          DOCMIND_DATABASE_URL_DIRECT: ${{ secrets.DOCMIND_DATABASE_URL_DIRECT }}
+        run: |
+          umask 077
+          {
+            printf 'DOCMIND_DATABASE_URL=%s\n' "$DOCMIND_DATABASE_URL"
+            printf 'DOCMIND_DATABASE_URL_DIRECT=%s\n' "$DOCMIND_DATABASE_URL_DIRECT"
+          } > .env.neon
+      - name: M5.5 sequence (migrate, status, ingest, status, demo check)
+        env:
+          DOCMIND_LLM_API_KEY: ${{ secrets.DOCMIND_LLM_API_KEY }}
+        run: |
+          python -m docmind_service.db migrate --env-file .env.neon
+          python -m docmind_service.db status --env-file .env.neon
+          python scripts/ingest_corpus.py --manifest evaluation/demo_corpus.json --tenant public --env-file .env.neon
+          python -m docmind_service.db status --env-file .env.neon
+          python scripts/check_demo_corpus.py --env-file .env.neon --out seed-demo-questions-check.json
+      - name: Upload demo-check results
+        if: always()
+        uses: actions/upload-artifact@ea165f8d65b6e75b540449e92b4886f43607fa02
+        with:
+          name: neon-seed-${{ github.sha }}
+          path: seed-demo-questions-check.json
+          if-no-files-found: ignore
