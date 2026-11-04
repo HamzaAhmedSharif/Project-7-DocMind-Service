@@ -13,6 +13,7 @@ from docmind_service.domain import (
     RetrievalError,
     RetrievedChunk,
 )
+from docmind_service.metrics import DB_ERRORS
 
 
 def _vector(values) -> str:
@@ -133,10 +134,13 @@ class PgStore:
         )
 
     def get_corpus_version(self, tenant_id: str) -> str:
-        with self.pool.connection() as conn:
-            row = conn.execute(
-                "SELECT corpus_version FROM tenants WHERE tenant_id = %s", (tenant_id,)
-            ).fetchone()
+        try:
+            with self.pool.connection() as conn:
+                row = conn.execute(
+                    "SELECT corpus_version FROM tenants WHERE tenant_id = %s", (tenant_id,)
+                ).fetchone()
+        except (psycopg.Error, PoolTimeout) as exc:
+            raise RetrievalError("retrieval backend unavailable") from exc
         return row[0] if row else "0"
 
     def _record(self, row) -> DocumentRecord:
@@ -204,6 +208,7 @@ class PgStore:
                     query, {"q": literal, "tenant": tenant_id, "docs": docs, "k": top_k}
                 ).fetchall()
         except (psycopg.Error, PoolTimeout) as exc:
+            DB_ERRORS.inc()
             raise RetrievalError("retrieval backend unavailable") from exc
         return [
             RetrievedChunk(

@@ -9,7 +9,7 @@ from uuid import UUID
 import numpy as np
 from fastapi import APIRouter, Depends, FastAPI, File, Request, Response, UploadFile
 from fastapi.exceptions import RequestValidationError
-from fastapi.responses import FileResponse, JSONResponse, PlainTextResponse
+from fastapi.responses import FileResponse, JSONResponse
 from fastapi.security import APIKeyHeader
 from fastapi.staticfiles import StaticFiles
 from starlette.exceptions import HTTPException as StarletteHTTPException
@@ -37,6 +37,16 @@ from docmind_service.fakes import FakeLLM, InMemoryRetriever
 from docmind_service.guardrails import PROMPT_VERSION
 from docmind_service.ingest import IngestError, prepare_document
 from docmind_service.llm import HostedLLM
+from docmind_service.metrics import (
+    CONTENT_TYPE_LATEST,
+    LLM_CALLS,
+    metrics_access,
+    observe_cache,
+    observe_llm,
+    observe_query,
+    render_metrics,
+    set_build_info,
+)
 from docmind_service.observability import configure_logging, request_context_middleware
 from docmind_service.problem import (
     error_responses,
@@ -364,10 +374,13 @@ def query(
     allowed, retry, headers = _rate_limit(state, principal, request)
     response.headers.update(headers)
     if not allowed:
+        observe_query("rate_limited", anonymous=principal.anonymous)
         raise LimitExceeded("rate_limited", retry, headers=headers)
     started = time.perf_counter()
     top_k = body.top_k or settings.default_top_k
     cache_state = "bypass"
+    if not settings.cache_enabled:
+        observe_cache("bypass")
     question_vector = None
     cache_scope = None
     corpus_version = "0"
@@ -379,20 +392,24 @@ def query(
     )
     if cache_enabled:
         question_vector = state.embedder.embed_query(body.question)
-        corpus_version = (
-            state.store.get_corpus_version(principal.tenant_id)
-            if hasattr(state.store, "get_corpus_version")
-            else "0"
-        )
-        cache_scope = _scope(state, body, top_k)
-        state.cache.maybe_purge(tenant_id=principal.tenant_id, corpus_version=corpus_version)
-        cached = state.cache.lookup(
-            tenant_id=principal.tenant_id,
-            corpus_version=corpus_version,
-            scope_hash=cache_scope,
-            embedding=question_vector,
-            threshold=settings.cache_threshold,
-        )
+        try:
+            corpus_version = (
+                state.store.get_corpus_version(principal.tenant_id)
+                if hasattr(state.store, "get_corpus_version")
+                else "0"
+            )
+            cache_scope = _scope(state, body, top_k)
+            state.cache.maybe_purge(tenant_id=principal.tenant_id, corpus_version=corpus_version)
+            cached = state.cache.lookup(
+                tenant_id=principal.tenant_id,
+                corpus_version=corpus_version,
+                scope_hash=cache_scope,
+                embedding=question_vector,
+                threshold=settings.cache_threshold,
+            )
+        except RetrievalError:
+            observe_query("retrieval_error", anonymous=principal.anonymous)
+            raise
         if cached is not None:
             cache_state = "hit"
             usage = Usage(
@@ -404,6 +421,8 @@ def query(
                 cache="hit",
             )
             citations = [Citation(**item) for item in cached["citations"]]
+            observe_cache("hit")
+            observe_query("cache_hit", anonymous=principal.anonymous)
             _emit_query_log(
                 state,
                 principal,
@@ -427,6 +446,7 @@ def query(
                 request_id=request.state.request_id,
             )
         cache_state = "miss"
+        observe_cache("miss")
     try:
         result = answer_question(
             body.question,
@@ -444,6 +464,17 @@ def query(
         )
     except LimitExceeded as exc:
         exc.headers = {**headers, **exc.headers}
+        observe_query(
+            "cap_reached" if exc.code == "daily_cap_reached" else "rate_limited",
+            anonymous=principal.anonymous,
+        )
+        raise
+    except ProviderError:
+        LLM_CALLS.inc()
+        observe_query("provider_error", anonymous=principal.anonymous)
+        raise
+    except RetrievalError:
+        observe_query("retrieval_error", anonymous=principal.anonymous)
         raise
     llm = result.llm
     usage = Usage(
@@ -454,6 +485,18 @@ def query(
         wait_seconds=llm.wait_seconds if llm else 0.0,
         cache=cache_state,
     )
+    if result.refused:
+        outcomes = {
+            "low_evidence": "refused_low_evidence",
+            "no_evidence": "refused_no_evidence",
+            "ungrounded": "refused_ungrounded",
+            "output_blocked": "blocked_output",
+        }
+        outcome = outcomes.get(result.refusal_reason, "refused_no_evidence")
+    else:
+        outcome = "answered"
+    observe_query(outcome, anonymous=principal.anonymous)
+    observe_llm(usage)
     citations = [
         Citation(document_id=c.document_id, page=c.page, chunk_id=c.chunk_id, score=c.score)
         for c in result.citations
@@ -476,6 +519,7 @@ def query(
                 "n_chunks": result.n_chunks,
             },
         )
+        observe_cache("store")
     _emit_query_log(
         state,
         principal,
@@ -591,6 +635,7 @@ def create_app(
     app.state.canary = canary
     app.state.provider_status = provider_status
     app.state.git_sha = settings.commit_sha
+    set_build_info(__version__, settings.commit_sha)
     app.middleware("http")(request_context_middleware)
     app.add_exception_handler(StarletteHTTPException, http_exception_handler)
     app.add_exception_handler(RequestValidationError, validation_exception_handler)
@@ -656,8 +701,13 @@ def create_app(
         return JSONResponse(body.model_dump(), status_code=200 if ready else 503)
 
     @app.get("/metrics", include_in_schema=False)
-    async def metrics() -> PlainTextResponse:
-        return PlainTextResponse("# metrics are added in milestone M7\n", status_code=501)
+    async def metrics(request: Request) -> Response:
+        access = metrics_access(settings, request.headers.get("authorization"))
+        if access == "off":
+            return problem_response(404, "Metrics are disabled.")
+        if access == "unauthorized":
+            return problem_response(401, "A bearer token is required for metrics.")
+        return Response(render_metrics(pool), media_type=CONTENT_TYPE_LATEST)
 
     app.include_router(v1)
     return app

@@ -8,6 +8,7 @@ from docmind_service.guardrails import (
     parse_citations,
     validate_output,
 )
+from docmind_service.metrics import RETRIEVAL, timer
 
 __all__ = [
     "MIN_EVIDENCE_SCORE",
@@ -75,9 +76,10 @@ def answer_question(
     max_answer_chars: int = 4000,
 ) -> QueryResult:
     extra = {"query_vector": query_vector} if query_vector is not None else {}
-    chunks = retriever.retrieve(
-        question, tenant_id=tenant_id, document_ids=document_ids, top_k=top_k, **extra
-    )
+    with timer(RETRIEVAL):
+        chunks = retriever.retrieve(
+            question, tenant_id=tenant_id, document_ids=document_ids, top_k=top_k, **extra
+        )
     if guardrails_enabled:
         chunks = [chunk for chunk in chunks if chunk.score >= evidence_min_score]
         if not chunks:

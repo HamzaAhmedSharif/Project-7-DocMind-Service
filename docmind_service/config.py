@@ -46,6 +46,7 @@ class Settings(BaseSettings):
     key_max_documents: int = Field(default=20, ge=1)
     key_max_pages: int = Field(default=500, ge=1)
     global_daily_llm_cap: int = Field(default=800, ge=1)
+    metrics_token: SecretStr | None = None
 
     guardrails_enabled: bool = True
     require_citation: bool = True
@@ -70,9 +71,13 @@ class Settings(BaseSettings):
     def llm_api_key_value(self) -> str | None:
         return self.llm_api_key.get_secret_value() if self.llm_api_key else None
 
-    @field_validator("git_sha", mode="before")
+    @property
+    def metrics_token_value(self) -> str | None:
+        return self.metrics_token.get_secret_value() if self.metrics_token else None
+
+    @field_validator("git_sha", "metrics_token", mode="before")
     @classmethod
-    def _empty_git_sha_is_none(cls, value):
+    def _empty_secret_is_none(cls, value):
         if isinstance(value, str) and not value.strip():
             return None
         return value

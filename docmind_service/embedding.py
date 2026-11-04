@@ -6,6 +6,8 @@ from threading import Lock
 import numpy as np
 from fastembed import TextEmbedding
 
+from docmind_service.metrics import EMBED, timer
+
 _QUERY_CACHE_SIZE = 256
 _TOKEN = re.compile(r"\w+", re.UNICODE)
 
@@ -47,7 +49,8 @@ class OnnxEmbedder:
             if cached is not None:
                 self._cache.move_to_end(text)
                 return cached
-        vector = self.embed_passages([text])[0]
+        with timer(EMBED):
+            vector = self.embed_passages([text])[0]
         with self._cache_lock:
             self._cache[text] = vector
             while len(self._cache) > _QUERY_CACHE_SIZE:

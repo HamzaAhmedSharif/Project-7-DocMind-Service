@@ -9,6 +9,7 @@ from openai import APIConnectionError, APIStatusError, OpenAI, RateLimitError
 
 from docmind_service.config import Settings
 from docmind_service.domain import LLMResult, ProviderError
+from docmind_service.metrics import LLM_SHED
 
 logger = logging.getLogger("docmind.llm")
 STATS = {"calls": 0, "retries": 0, "throttled_seconds": 0.0}
@@ -103,12 +104,14 @@ class HostedLLM:
 
     def _acquire(self, estimate: int) -> float:
         if estimate > self.tokens.capacity:
+            LLM_SHED.inc()
             raise ProviderError("request exceeds the per-minute limit")
         with self._pacing:
             wait = max(self.requests.take(1), self.tokens.take(estimate))
             if wait > self.settings.llm_max_wait_seconds:
                 self.requests.give_back(1)
                 self.tokens.give_back(estimate)
+                LLM_SHED.inc()
                 raise ProviderError("request would wait too long", retry_after=math.ceil(wait))
             if wait > 0:
                 self._sleep(wait)

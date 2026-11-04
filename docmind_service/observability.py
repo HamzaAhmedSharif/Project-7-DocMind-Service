@@ -9,6 +9,8 @@ from datetime import UTC, datetime
 
 from fastapi import Request
 
+from docmind_service.metrics import observe_request, route_template
+
 REQUEST_ID_HEADER = "X-Request-ID"
 _VALID_ID = re.compile(r"^[A-Za-z0-9._-]{1,64}$")
 
@@ -103,6 +105,9 @@ async def request_context_middleware(request: Request, call_next):
         response.headers[REQUEST_ID_HEADER] = request_id
         return response
     finally:
+        observe_request(
+            route_template(request), request.method, status, time.perf_counter() - started
+        )
         access_logger.info(
             "request",
             extra={

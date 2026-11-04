@@ -4,10 +4,24 @@ from __future__ import annotations
 
 import hashlib
 import json
+from contextlib import contextmanager
 from dataclasses import dataclass
 from datetime import UTC, datetime, timedelta
 
 import numpy as np
+import psycopg
+from psycopg_pool import PoolTimeout
+
+from docmind_service.domain import RetrievalError
+
+
+@contextmanager
+def _db_errors():
+    """Translate cache database failures into RetrievalError (as the store does)."""
+    try:
+        yield
+    except (psycopg.Error, PoolTimeout) as exc:
+        raise RetrievalError("retrieval backend unavailable") from exc
 
 
 def scope_hash(
@@ -101,24 +115,25 @@ class SemanticCache:
                 return None
             best.hits += 1
             return best.answer_json
-        with self.pool.connection(timeout=3) as conn:
-            row = conn.execute(
-                "SELECT id, answer_json, 1 - (question_embedding <=> %s::vector) AS similarity "
-                "FROM semantic_cache WHERE tenant_id = %s AND corpus_version = %s "
-                "AND scope_hash = %s AND created_at >= %s "
-                "ORDER BY question_embedding <=> %s::vector LIMIT 1",
-                (
-                    _vector(embedding),
-                    tenant_id,
-                    corpus_version,
-                    scope_hash,
-                    cutoff,
-                    _vector(embedding),
-                ),
-            ).fetchone()
-            if row is None or float(row[2]) < threshold:
-                return None
-            conn.execute("UPDATE semantic_cache SET hits = hits + 1 WHERE id = %s", (row[0],))
+        with _db_errors():
+            with self.pool.connection(timeout=3) as conn:
+                row = conn.execute(
+                    "SELECT id, answer_json, 1 - (question_embedding <=> %s::vector) AS similarity "
+                    "FROM semantic_cache WHERE tenant_id = %s AND corpus_version = %s "
+                    "AND scope_hash = %s AND created_at >= %s "
+                    "ORDER BY question_embedding <=> %s::vector LIMIT 1",
+                    (
+                        _vector(embedding),
+                        tenant_id,
+                        corpus_version,
+                        scope_hash,
+                        cutoff,
+                        _vector(embedding),
+                    ),
+                ).fetchone()
+                if row is None or float(row[2]) < threshold:
+                    return None
+                conn.execute("UPDATE semantic_cache SET hits = hits + 1 WHERE id = %s", (row[0],))
         return row[1]
 
     def store(
@@ -143,25 +158,26 @@ class SemanticCache:
             )
             self._evict(tenant_id)
             return
-        with self.pool.connection(timeout=3) as conn:
-            conn.execute(
-                "INSERT INTO semantic_cache "
-                "(tenant_id, corpus_version, scope_hash, question_embedding, answer_json) "
-                "VALUES (%s, %s, %s, %s::vector, %s::jsonb)",
-                (
-                    tenant_id,
-                    corpus_version,
-                    scope_hash,
-                    _vector(embedding),
-                    json.dumps(answer_json),
-                ),
-            )
-            conn.execute(
-                "DELETE FROM semantic_cache WHERE tenant_id = %s AND id NOT IN "
-                "(SELECT id FROM semantic_cache WHERE tenant_id = %s "
-                "ORDER BY created_at DESC, id DESC LIMIT %s)",
-                (tenant_id, tenant_id, self.max_rows),
-            )
+        with _db_errors():
+            with self.pool.connection(timeout=3) as conn:
+                conn.execute(
+                    "INSERT INTO semantic_cache "
+                    "(tenant_id, corpus_version, scope_hash, question_embedding, answer_json) "
+                    "VALUES (%s, %s, %s, %s::vector, %s::jsonb)",
+                    (
+                        tenant_id,
+                        corpus_version,
+                        scope_hash,
+                        _vector(embedding),
+                        json.dumps(answer_json),
+                    ),
+                )
+                conn.execute(
+                    "DELETE FROM semantic_cache WHERE tenant_id = %s AND id NOT IN "
+                    "(SELECT id FROM semantic_cache WHERE tenant_id = %s "
+                    "ORDER BY created_at DESC, id DESC LIMIT %s)",
+                    (tenant_id, tenant_id, self.max_rows),
+                )
 
     def _evict(self, tenant_id: str) -> None:
         mine = [row for row in self.rows if row.tenant_id == tenant_id]
@@ -184,17 +200,18 @@ class SemanticCache:
 
             self.rows = [row for row in self.rows if keep(row)]
             return before - len(self.rows)
-        with self.pool.connection(timeout=3) as conn:
-            if tenant_id is None:
-                rows = conn.execute(
-                    "DELETE FROM semantic_cache WHERE created_at < %s RETURNING id", (cutoff,)
-                ).fetchall()
-            else:
-                rows = conn.execute(
-                    "DELETE FROM semantic_cache WHERE tenant_id = %s AND "
-                    "(created_at < %s OR corpus_version <> %s) RETURNING id",
-                    (tenant_id, cutoff, corpus_version or ""),
-                ).fetchall()
+        with _db_errors():
+            with self.pool.connection(timeout=3) as conn:
+                if tenant_id is None:
+                    rows = conn.execute(
+                        "DELETE FROM semantic_cache WHERE created_at < %s RETURNING id", (cutoff,)
+                    ).fetchall()
+                else:
+                    rows = conn.execute(
+                        "DELETE FROM semantic_cache WHERE tenant_id = %s AND "
+                        "(created_at < %s OR corpus_version <> %s) RETURNING id",
+                        (tenant_id, cutoff, corpus_version or ""),
+                    ).fetchall()
         return len(rows)
 
     def maybe_purge(self, *, tenant_id: str, corpus_version: str) -> None:
