@@ -1,0 +1,177 @@
+{
+  "generated_at": "2026-11-04T12:08:45.453018+00:00",
+  "status": "measured",
+  "model": "openai/gpt-oss-120b",
+  "prompt_version": "p7-v2",
+  "require_citation_measured": false,
+  "total": 12,
+  "no_citation": 1,
+  "recommended_default": true,
+  "answers": [
+    {
+      "id": "d01",
+      "refused": false,
+      "refusal_reason": null,
+      "citations": 1,
+      "citation_ids": [
+        "da558d75-f520-406b-aad3-2a5dc03e8f3c:6"
+      ],
+      "answer_chars": 202,
+      "prompt_tokens": 2368,
+      "completion_tokens": 107,
+      "provider_requests": 1
+    },
+    {
+      "id": "d02",
+      "refused": false,
+      "refusal_reason": null,
+      "citations": 2,
+      "citation_ids": [
+        "da558d75-f520-406b-aad3-2a5dc03e8f3c:10",
+        "da558d75-f520-406b-aad3-2a5dc03e8f3c:14"
+      ],
+      "answer_chars": 700,
+      "prompt_tokens": 2403,
+      "completion_tokens": 237,
+      "provider_requests": 1
+    },
+    {
+      "id": "d03",
+      "refused": false,
+      "refusal_reason": null,
+      "citations": 2,
+      "citation_ids": [
+        "da558d75-f520-406b-aad3-2a5dc03e8f3c:12",
+        "da558d75-f520-406b-aad3-2a5dc03e8f3c:11"
+      ],
+      "answer_chars": 612,
+      "prompt_tokens": 2087,
+      "completion_tokens": 191,
+      "provider_requests": 1
+    },
+    {
+      "id": "d04",
+      "refused": false,
+      "refusal_reason": null,
+      "citations": 1,
+      "citation_ids": [
+        "da558d75-f520-406b-aad3-2a5dc03e8f3c:8"
+      ],
+      "answer_chars": 281,
+      "prompt_tokens": 2438,
+      "completion_tokens": 135,
+      "provider_requests": 2
+    },
+    {
+      "id": "d05",
+      "refused": false,
+      "refusal_reason": null,
+      "citations": 1,
+      "citation_ids": [
+        "da558d75-f520-406b-aad3-2a5dc03e8f3c:30"
+      ],
+      "answer_chars": 94,
+      "prompt_tokens": 2443,
+      "completion_tokens": 54,
+      "provider_requests": 2
+    },
+    {
+      "id": "d06",
+      "refused": false,
+      "refusal_reason": null,
+      "citations": 5,
+      "citation_ids": [
+        "da558d75-f520-406b-aad3-2a5dc03e8f3c:13",
+        "da558d75-f520-406b-aad3-2a5dc03e8f3c:14",
+        "da558d75-f520-406b-aad3-2a5dc03e8f3c:12",
+        "da558d75-f520-406b-aad3-2a5dc03e8f3c:10",
+        "da558d75-f520-406b-aad3-2a5dc03e8f3c:23"
+      ],
+      "answer_chars": 1526,
+      "prompt_tokens": 2318,
+      "completion_tokens": 410,
+      "provider_requests": 2
+    },
+    {
+      "id": "d07",
+      "refused": false,
+      "refusal_reason": null,
+      "citations": 1,
+      "citation_ids": [
+        "da558d75-f520-406b-aad3-2a5dc03e8f3c:18"
+      ],
+      "answer_chars": 363,
+      "prompt_tokens": 2529,
+      "completion_tokens": 110,
+      "provider_requests": 2
+    },
+    {
+      "id": "d08",
+      "refused": false,
+      "refusal_reason": null,
+      "citations": 2,
+      "citation_ids": [
+        "da558d75-f520-406b-aad3-2a5dc03e8f3c:25",
+        "da558d75-f520-406b-aad3-2a5dc03e8f3c:26"
+      ],
+      "answer_chars": 288,
+      "prompt_tokens": 2618,
+      "completion_tokens": 185,
+      "provider_requests": 2
+    },
+    {
+      "id": "d09",
+      "refused": false,
+      "refusal_reason": null,
+      "citations": 0,
+      "citation_ids": [],
+      "answer_chars": 250,
+      "prompt_tokens": 2900,
+      "completion_tokens": 92,
+      "provider_requests": 2
+    },
+    {
+      "id": "d10",
+      "refused": false,
+      "refusal_reason": null,
+      "citations": 2,
+      "citation_ids": [
+        "da558d75-f520-406b-aad3-2a5dc03e8f3c:28",
+        "da558d75-f520-406b-aad3-2a5dc03e8f3c:27"
+      ],
+      "answer_chars": 134,
+      "prompt_tokens": 2763,
+      "completion_tokens": 157,
+      "provider_requests": 2
+    },
+    {
+      "id": "d11",
+      "refused": false,
+      "refusal_reason": null,
+      "citations": 2,
+      "citation_ids": [
+        "da558d75-f520-406b-aad3-2a5dc03e8f3c:21",
+        "da558d75-f520-406b-aad3-2a5dc03e8f3c:22"
+      ],
+      "answer_chars": 1394,
+      "prompt_tokens": 2242,
+      "completion_tokens": 331,
+      "provider_requests": 2
+    },
+    {
+      "id": "d12",
+      "refused": false,
+      "refusal_reason": null,
+      "citations": 2,
+      "citation_ids": [
+        "da558d75-f520-406b-aad3-2a5dc03e8f3c:15",
+        "da558d75-f520-406b-aad3-2a5dc03e8f3c:9"
+      ],
+      "answer_chars": 349,
+      "prompt_tokens": 2292,
+      "completion_tokens": 122,
+      "provider_requests": 2
+    }
+  ],
+  "provider_requests": 21
+}

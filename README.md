@@ -65,7 +65,8 @@ The service is not hosted publicly. The M5 release image is verified in CI; the 
 - **Evidence threshold:** paper 0.35 (refuses 0 of 4 absent questions), demo 0.52 (refuses 6 of 6 off-topic questions), both from retrieval-only calibration; the threshold is per corpus and is not guessed.
 - **Cache:** keyed by tenant, corpus version and scope hash; τ = 0.86 from the pre-declared calibration/test split; test-half same-intent hit rate 0.3636 and false-hit share 0.0000. Only non-refused, validated answers are stored; 30-day TTL; at most 500 rows per tenant.
 - **Demo query log:** anonymous questions are stored redacted for 30 days (emails, phone numbers, ID-like numbers and links removed; names may remain). Keyed tenants are not logged. Do not enter personal data.
-- **Red-team:** 15 poisoned passages, arm off vs on, two repeats. The live R1 run is **pending H6** because the local provider key returned 403; no red-team number is claimed yet. The harness dry-run is green.
+- **Red-team:** 15 poisoned passages, arm off vs on, two repeats. Live R1: arm `on` **0 / 15** attacks succeeded, arm `off` **7 / 15**; R1 passes (`0 / 15 <= 2`, not gating). The `off` arm shows the harness can succeed. Result file: `evaluation/results/redteam-m6.json`.
+- **No-citation:** 12 answerable paper questions with the citation check off: **1 / 12** answers had no valid citation and **0 / 12** were refused, so the pre-declared rule keeps `REQUIRE_CITATION=true`; that one answer would become a refusal. Result file: `evaluation/results/no-citation-m6.json`.
 - **Not covered:** no WAF or bot protection, no per-IP protection beyond the caps, regex redaction misses names and novel formats, revocation can take up to 60 s, and poisoned facts are out of scope.
 
 Full threat table, test evidence and residual risks: [`docs/SECURITY.md`](docs/SECURITY.md).

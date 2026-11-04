@@ -1,8 +1,8 @@
 # STATE
-Updated: 2026-11-04 09:58 UTC
-Current milestone: M5 · G8-C green; documents round complete; awaiting manager verdict
-Last commit: c149900 CI: add manual neon-seed workflow (M5.5 seeding via release-smoke environment) (pushed)
-Last pushed head: c149900 · origin/main; the docs round is local and not pushed
+Updated: 2026-11-04 12:30 UTC
+Current milestone: M6 · offline part + provider measurements complete; stopped before M6.10
+Last commit: 66b87ea docs: M6 milestone report (local)
+Last pushed head: c149900 · origin/main; M6 commits are local and not pushed
 Evidence branch: evidence/bad-chunking at 427d2c5 (unmerged)
 
 ## Milestones
@@ -14,6 +14,7 @@ Evidence branch: evidence/bad-chunking at 427d2c5 (unmerged)
 | M3 | done (manager released M4) | reports/M3.md | 1538e20 (M3c) + FIX commits 992ee80 | 2026-11-03 |
 | M4 | built, pushed to origin/main; manager verdict not recorded | reports/M4.md | beb6731, e1b816d, 123e697, ca18652, f4ecd92 | 2026-11-03 |
 | M5 | G8-C green; documents round complete; awaiting manager verdict | reports/M5.md | c149900 (pushed) + docs round (local) | 2026-11-04 |
+| M6 | offline part + provider measurements measured; stopped before M6.10 | reports/M6.md | d62681d, a173df0, 66b87ea + measurement commit (local) | 2026-11-04 |
 
 ## M5 verification (Amendment A1)
 - **G8-C:** release-smoke run 41809139449 (manual dispatch, head `c149900`), 9/9 PASS — https://github.com/HamzaAhmedSharif/Project-7-DocMind-Service/actions/runs/41809139449.
@@ -31,7 +32,7 @@ Evidence branch: evidence/bad-chunking at 427d2c5 (unmerged)
 | H4 | Render service URL | RETIRED under A1 (Render card wall 2026-11-04) | retired |
 | H4a | GitHub environment `release-smoke` with three secrets | Used by the release-smoke and neon-seed runs; names only: `DOCMIND_DATABASE_URL`, `DOCMIND_DATABASE_URL_DIRECT`, `DOCMIND_LLM_API_KEY` | done |
 | H5 | `DEMO_URL` + `RENDER_DEPLOY_HOOK_URL` | `RENDER_DEPLOY_HOOK_URL` retired; `DEMO_URL` conditional on a supplement passing (none) | retired/conditional |
-| H6 | Groq key | Resolved: `check_llm` green (78 prompt / 28 completion, 4.010 s); the green release-smoke run used 1 request | resolved |
+| H6 | Groq key | Resolved: `check_llm` green (78 prompt / 28 completion, 4.010 s); configured key accepted for the M6 measurements (no-citation 12 questions, red-team 60 case-runs) | resolved |
 
 ## Blocked items
 - None blocking M5.
@@ -41,20 +42,21 @@ Evidence branch: evidence/bad-chunking at 427d2c5 (unmerged)
 - `MIN_EVIDENCE_SCORE = 0.2` added in `query.py` so `zzzz qqqq` (top score 0.1818) refuses with `no_evidence`; M6 will make it a measured setting.
 
 ## Provider ledger today (UTC)
-- Release-smoke runs today: 3 — 41805063857 (0 requests), 41807161569 (0), 41809139449 (1). Release-smoke requests total: 1.
-- Local `check_llm` probes: 2 successful (78/18 and 78/28); the 403 attempt made no successful call.
-- **Ledger total: 3 successful requests of 800.**
-- `provider_budget.py --used-today 2`: `release_smoke_runs_today=3`, `used_today=2`, `used_today_upper_bound=5` (upper bound counts one per run).
-- `evaluation/results/provider-limits.json` carries the `release_smoke` accounting block (0 + 0 + 1).
+- Release-smoke runs today: 4 — counted by `provider_budget.py` from the workflow-run list (upper bound one request per run).
+- Pre-flight (`provider_budget.py --used-today 24`, verbatim): `release_smoke_runs_today=4`, `used_today=24`, `used_today_upper_bound=28`.
+- M6 measurement attempts (script output): `no_citation=1/12 recommended_default=True provider_requests=21`; red-team `provider_requests=39` (arm `off`) + `49` (arm `on`) = 88. Total 109.
+- Post-flight (`provider_budget.py --used-today 133`, verbatim): `release_smoke_runs_today=4`, `used_today=133`, `used_today_upper_bound=137` of 800.
+- M6-round attempts including the aborted pre-run (3 successful calls) and six auth-rejected attempts: 118, within the 150-request M6 budget.
+- `evaluation/results/provider-limits.json` keeps the M5 `release_smoke` accounting block and adds the post-flight `m6_budget` block.
 
 ## Test coverage note
 - `docmind_service/ratelimit.py` has dedicated unit tests in `tests/test_ratelimit.py` (7 tests: window math/Retry-After, key independence, eviction bound, client-IP spoof resistance, daily-cap rollover, `CappedLLM` increment order, no-evidence refusal not incrementing the cap). Not a gap.
 
 ## Notes for the next session
-1. Manager: verdict on M5 (G8-C green; documents round complete).
-2. No push of the docs round; `c149900` is the pushed head.
-3. If a supplement is attempted: H4b/H4c, G8-L, survival check; set `DEMO_URL` only if G8-L is green.
-4. Provider budget: 3 of 800 used today (2 local `check_llm` + 1 release-smoke).
+1. Manager: verdict on M6 (offline part + provider measurements; R1 PASS 0/15, no-citation 1/12 keeps `REQUIRE_CITATION=true`).
+2. No push of the M6 commits; `c149900` is the pushed head.
+3. M6.10 (Neon/live key checks, [H8]) is not started; no public host and no `DEMO_URL` per Amendment A1.
+4. Provider budget: `used_today=133`, upper bound 137 of 800; M6-round attempts 118 of the 150-request M6 budget.
 5. gitleaks full history and staged scan: no leaks found (verbatim in `reports/M5.md`).
 6. `docs/FACTS.md` is new; every row cites a source file or run URL.
 

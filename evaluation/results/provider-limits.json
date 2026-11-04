@@ -19,5 +19,10 @@
     ],
     "requests_total": 1,
     "counting_rule": "at most 1 provider request per release-smoke run; provider_budget.py counts runs from the workflow-run list"
+  },
+  "m6_budget": {
+    "release_smoke_runs": 4,
+    "used_today": 133,
+    "used_today_upper_bound": 137
   }
 }
