@@ -1,7 +1,12 @@
-"""HTTP smoke test for DocMind (M4.3): standard library only.
+"""HTTP smoke test for DocMind: standard library only.
+
+Modes:
+  ci         - the compose stack, fake provider (M4.3)
+  live       - a persistent host (M5.7)
+  ephemeral  - the release image, nine checks (A1.4 / G8-C)
 
 Prints `PASS <name>` or `FAIL <name>: <reason>` for every check and exits 1
-if any check failed (used by the CI image job and the local measurements).
+if any check failed.
 """
 
 from __future__ import annotations
@@ -9,6 +14,7 @@ from __future__ import annotations
 import argparse
 import json
 import os
+import re
 import sys
 import time
 import urllib.error
@@ -24,6 +30,8 @@ PDF_TEXT = (
     "Self-attention lets each token weigh every other token. "
     "Positional encodings give order information."
 )
+NO_EVIDENCE_QUESTION = "zzzz qqqq"
+DEMO_DOCUMENT_COUNT = 3
 
 
 def multipart(filename: str, data: bytes, field: str = "file"):
@@ -45,13 +53,38 @@ def _header(headers: dict, name: str) -> str | None:
     return None
 
 
+def mem_peak_mib(path: str | None) -> float | None:
+    """Parse the largest `docker stats` MemUsage value from mem.txt."""
+    if not path or not Path(path).is_file():
+        return None
+    peak = 0.0
+    for line in Path(path).read_text(encoding="utf-8").splitlines():
+        match = re.match(r"([\d.]+)\s*([KMG]i?B)", line.strip())
+        if not match:
+            continue
+        value, unit = float(match.group(1)), match.group(2).lower()
+        peak = max(peak, value * {"kib": 1 / 1024, "mib": 1, "gib": 1024}[unit])
+    return round(peak, 1)
+
+
 def build_parser() -> argparse.ArgumentParser:
     parser = argparse.ArgumentParser(description="DocMind HTTP smoke test.")
     parser.add_argument("--base", required=True)
-    parser.add_argument("--mode", choices=["ci", "live"], required=True)
+    parser.add_argument("--mode", choices=["ci", "live", "ephemeral"], required=True)
     parser.add_argument("--timeout", type=int, default=0)
     parser.add_argument("--expect-commit", default=None)
+    parser.add_argument("--expect-image-revision", default=None)
     parser.add_argument("--api-key-env", default=None)
+    parser.add_argument("--check-limits", action="store_true")
+    parser.add_argument("--ip-per-min", type=int, default=5)
+    parser.add_argument("--json-out", default=None)
+    parser.add_argument("--mem-file", default=None)
+    parser.add_argument("--runner-type", default="local")
+    parser.add_argument("--container-limit", default="512m")
+    parser.add_argument(
+        "--conditions",
+        default="local Docker, 512 MB container limit, local Postgres, hosted provider",
+    )
     return parser
 
 
@@ -62,9 +95,12 @@ class Smoke:
         self.api_key = api_key
         self.ok = True
         self.checks = 0
+        self.results: list[dict] = []
+        self.info: dict = {}
 
     def record(self, name: str, passed: bool, reason: str = "") -> None:
         self.checks += 1
+        self.results.append({"name": name, "passed": passed, "reason": reason})
         if not passed:
             self.ok = False
             print(f"FAIL {name}: {reason}")
@@ -164,7 +200,9 @@ def run_ci(smoke: Smoke) -> None:
 
     # M6 adds a relevance floor; until then nonsense text still retrieves the one
     # chunk, so the no-evidence path is exercised with a document filter that matches nothing.
-    qbody = json.dumps({"question": "zzzz qqqq", "document_ids": [str(uuid.uuid4())]}).encode()
+    qbody = json.dumps(
+        {"question": NO_EVIDENCE_QUESTION, "document_ids": [str(uuid.uuid4())]}
+    ).encode()
     status, _, answer = smoke.get_json(
         "POST", "/v1/query", qbody, {"Content-Type": "application/json"}
     )
@@ -213,13 +251,13 @@ def run_ci(smoke: Smoke) -> None:
 
 
 def sample_question() -> str:
-    path = Path(__file__).resolve().parent.parent / "evaluation" / "demo_corpus.json"
+    path = Path(__file__).resolve().parent.parent / "evaluation" / "demo_questions.json"
     if path.exists():
         data = json.loads(path.read_text(encoding="utf-8"))
-        for item in data if isinstance(data, list) else data.get("items", []):
+        for item in data.get("questions", []):
             if item.get("question"):
                 return str(item["question"])
-    return "self-attention"
+    return "What is the core purpose of the AI Risk Management Framework?"
 
 
 def run_live(smoke: Smoke) -> None:
@@ -242,28 +280,194 @@ def run_live(smoke: Smoke) -> None:
         and bool(answer)
         and answer.get("refused") is False
         and len(answer.get("citations", [])) >= 1,
-        f"status={status} answer={answer}",
+        f"status={status} refused={(answer or {}).get('refused')} "
+        f"citations={len((answer or {}).get('citations', []))}",
     )
 
 
+def run_ephemeral(smoke: Smoke, args: argparse.Namespace) -> None:
+    """Nine checks against the release image (A1.4). Costs at most one provider request."""
+    commit = args.expect_commit
+    smoke.record(
+        "image revision label equals the commit",
+        bool(args.expect_image_revision) and args.expect_image_revision == commit,
+        f"label={args.expect_image_revision!r} commit={commit!r}",
+    )
+
+    smoke.poll(
+        "healthz 200 and commit matches",
+        "/healthz",
+        lambda s, h, b: s == 200 and json.loads(b).get("commit") == commit,
+        f"commit != {commit}",
+    )
+
+    def ready(s: int, h: dict, b: bytes) -> bool:
+        if s != 200:
+            return False
+        doc = json.loads(b)
+        checks = doc.get("checks", {})
+        return (
+            doc.get("status") == "ready"
+            and checks.get("database") == "ok"
+            and checks.get("embedder") == "ok"
+        )
+
+    started = time.monotonic()
+    smoke.poll("readyz database and embedder ok", "/readyz", ready, "not ready")
+    smoke.info["readyz_first_latency_s"] = round(time.monotonic() - started, 3)
+
+    status, header, _ = smoke.request("GET", "/")
+    csp = _header(header, "Content-Security-Policy") or ""
+    ctype = _header(header, "Content-Type") or ""
+    smoke.record(
+        "landing page 200 HTML with CSP",
+        status == 200
+        and ctype.startswith("text/html")
+        and "default-src 'none'" in csp
+        and "frame-ancestors 'none'" in csp
+        and (_header(header, "X-Content-Type-Options") or "").lower() == "nosniff"
+        and (_header(header, "Referrer-Policy") or "").lower() == "no-referrer",
+        f"status={status} content_type={ctype!r} csp={csp!r}",
+    )
+
+    status, _, listing = smoke.get_json("GET", "/v1/documents")
+    items = (listing or {}).get("items", [])
+    smoke.info["document_count"] = len(items)
+    smoke.record(
+        "demo documents listed",
+        status == 200 and len(items) >= DEMO_DOCUMENT_COUNT,
+        f"status={status} count={len(items)}",
+    )
+
+    qbody = json.dumps({"question": sample_question()}).encode()
+    started = time.monotonic()
+    status, _, answer = smoke.get_json(
+        "POST", "/v1/query", qbody, {"Content-Type": "application/json"}
+    )
+    smoke.info["first_query_latency_s"] = round(time.monotonic() - started, 3)
+    smoke.record(
+        "sample question answered with a citation",
+        status == 200
+        and bool(answer)
+        and answer.get("refused") is False
+        and len(answer.get("citations", [])) >= 1,
+        f"status={status} refused={(answer or {}).get('refused')} "
+        f"citations={len((answer or {}).get('citations', []))} "
+        f"usage={(answer or {}).get('usage')}",
+    )
+
+    qbody = json.dumps({"question": NO_EVIDENCE_QUESTION}).encode()
+    started = time.monotonic()
+    status, _, answer = smoke.get_json(
+        "POST", "/v1/query", qbody, {"Content-Type": "application/json"}
+    )
+    smoke.info["warm_query_latency_s"] = round(time.monotonic() - started, 3)
+    smoke.info["warm_query_note"] = "refused query, no provider call (one-request budget)"
+    usage = (answer or {}).get("usage") or {}
+    smoke.record(
+        "nonsense question refused",
+        status == 200
+        and bool(answer)
+        and answer.get("refused") is True
+        and answer.get("refusal_reason") == "no_evidence"
+        and usage.get("calls") == 0,
+        f"status={status} refused={(answer or {}).get('refused')} "
+        f"reason={(answer or {}).get('refusal_reason')} calls={usage.get('calls')}",
+    )
+
+    pdf = make_pdf([PDF_TEXT])
+    body, ctype = multipart("smoke.pdf", pdf)
+    status, _, problem = smoke.get_json("POST", "/v1/documents", body, {"Content-Type": ctype})
+    smoke.record("anonymous upload 403", status == 403, f"status={status} problem={problem}")
+
+    # Checks 6 and 7 used two slots of the same per-IP window. Wait out the 60 s
+    # window, then send cap+1 refused queries; the (cap+1)th must be 429.
+    cap = max(1, args.ip_per_min)
+    time.sleep(61)
+    statuses = []
+    retry_after = None
+    for index in range(cap + 1):
+        qbody = json.dumps({"question": NO_EVIDENCE_QUESTION}).encode()
+        status, header, _ = smoke.get_json(
+            "POST", "/v1/query", qbody, {"Content-Type": "application/json"}
+        )
+        statuses.append(status)
+        if index == cap:
+            retry_after = _header(header, "Retry-After")
+    smoke.info["limits_check"] = {
+        "approach": (
+            "waited 61 s after checks 6-7 to clear the 60 s per-IP window; "
+            "sent cap+1 refused queries"
+        ),
+        "cap": cap,
+        "statuses": statuses,
+    }
+    smoke.record(
+        "rapid queries hit the per-IP cap",
+        all(status == 200 for status in statuses[:cap])
+        and statuses[cap] == 429
+        and retry_after is not None
+        and int(retry_after) >= 1,
+        f"cap={cap} statuses={statuses} retry_after={retry_after!r}",
+    )
+
+    smoke.info["provider_requests"] = 1
+    smoke.info["runner_type"] = args.runner_type
+    smoke.info["container_limit"] = args.container_limit
+    smoke.info["conditions"] = args.conditions
+    smoke.info["mem_peak_mib"] = mem_peak_mib(args.mem_file)
+
+
+def write_json(smoke: Smoke, args: argparse.Namespace) -> None:
+    if not args.json_out:
+        return
+    payload = {
+        "mode": args.mode,
+        "base": args.base,
+        "expect_commit": args.expect_commit,
+        "expect_image_revision": args.expect_image_revision,
+        "ok": smoke.ok,
+        "checks": smoke.results,
+        "info": smoke.info,
+    }
+    Path(args.json_out).write_text(json.dumps(payload, indent=2) + "\n", encoding="utf-8")
+
+
 def main(argv: list[str] | None = None) -> int:
+    for stream in (sys.stdout, sys.stderr):
+        if hasattr(stream, "reconfigure"):
+            stream.reconfigure(encoding="utf-8", errors="replace")
     parser = build_parser()
     args = parser.parse_args(argv)
+    if args.mode == "ephemeral":
+        if not args.expect_commit:
+            parser.error("--mode ephemeral requires --expect-commit")
+        if not args.expect_image_revision:
+            parser.error("--mode ephemeral requires --expect-image-revision")
+        if not args.check_limits:
+            parser.error("--mode ephemeral requires --check-limits")
     timeout = args.timeout or (180 if args.mode == "ci" else 900)
     api_key = os.environ.get(args.api_key_env, "") if args.api_key_env else ""
     smoke = Smoke(args.base, timeout, api_key or None)
 
-    if args.mode == "ci":
-        run_ci(smoke)
-    else:
-        run_live(smoke)
-        if args.expect_commit:
-            smoke.poll(
-                "healthz commit",
-                "/healthz",
-                lambda s, h, b: s == 200 and json.loads(b).get("commit") == args.expect_commit,
-                f"commit != {args.expect_commit}",
-            )
+    try:
+        if args.mode == "ci":
+            run_ci(smoke)
+        elif args.mode == "ephemeral":
+            run_ephemeral(smoke, args)
+        else:
+            run_live(smoke)
+            if args.expect_commit:
+                smoke.poll(
+                    "healthz commit",
+                    "/healthz",
+                    lambda s, h, b: s == 200 and json.loads(b).get("commit") == args.expect_commit,
+                    f"commit != {args.expect_commit}",
+                )
+    except Exception as exc:
+        smoke.record("smoke script completed", False, f"{type(exc).__name__}: {exc}")
+    finally:
+        write_json(smoke, args)
 
     print(f"smoke_http {args.mode}: {smoke.checks} checks, ok={smoke.ok}")
     return 0 if smoke.ok else 1

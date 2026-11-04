@@ -4,7 +4,7 @@ from __future__ import annotations
 
 import pytest
 
-from scripts.smoke_http import build_parser, multipart
+from scripts.smoke_http import build_parser, main, mem_peak_mib, multipart
 
 
 class TestMultipart:
@@ -55,3 +55,41 @@ class TestParser:
     def test_requires_both(self, missing: list[str]) -> None:
         with pytest.raises(SystemExit):
             build_parser().parse_args(missing)
+
+
+class TestEphemeralParser:
+    def test_requires_commit_revision_and_limits(self) -> None:
+        with pytest.raises(SystemExit):
+            main(["--base", "http://x", "--mode", "ephemeral"])
+
+    def test_accepts_ephemeral_args(self) -> None:
+        args = build_parser().parse_args(
+            [
+                "--base",
+                "http://127.0.0.1:8000",
+                "--mode",
+                "ephemeral",
+                "--expect-commit",
+                "abc123",
+                "--expect-image-revision",
+                "abc123",
+                "--check-limits",
+                "--ip-per-min",
+                "5",
+                "--json-out",
+                "smoke.json",
+                "--mem-file",
+                "mem.txt",
+            ]
+        )
+        assert args.mode == "ephemeral"
+        assert args.expect_image_revision == "abc123"
+        assert args.check_limits is True
+        assert args.ip_per_min == 5
+        assert args.json_out == "smoke.json"
+
+
+def test_mem_peak_mib(tmp_path) -> None:
+    path = tmp_path / "mem.txt"
+    path.write_text("100.5MiB / 512MiB\n200MiB / 512MiB\n1.5GiB / 2GiB\n", encoding="utf-8")
+    assert mem_peak_mib(str(path)) == 1536.0
