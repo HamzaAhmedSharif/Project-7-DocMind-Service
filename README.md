@@ -6,9 +6,9 @@
 
 ![license](https://img.shields.io/badge/license-MIT-green)
 
-A production-style RAG service built on top of [DocMind Agent](https://github.com/HamzaAhmedSharif/Project-6-DocMind-Agent), developed in the open with every claim backed by a measurement.
+A RAG service built on top of [DocMind Agent](https://github.com/HamzaAhmedSharif/Project-6-DocMind-Agent), developed in the open with every claim backed by a measurement.
 
-**Status: milestone M4 of 8 (CI/CD with quality gates, Docker image, security scans).** `POST /v1/query` and the document endpoints work end to end against Postgres/pgvector with ONNX embeddings; the language model provider is the fake one by default. Every push and pull request runs the gates registered in `evaluation/gates.json`, the image is built, scanned and smoke-tested in CI, and one deliberately bad pull request proves the retrieval gate blocks a regression. Nothing below is claimed as built until its milestone is done.
+**Status: milestone M5 of 8 (release verification against Neon; no persistent host).** `POST /v1/query` and the document endpoints work end to end against Postgres/pgvector with ONNX embeddings; the language model provider is the fake one by default. Every push and pull request runs the gates registered in `evaluation/gates.json`, the image is built, scanned and smoke-tested in CI, and one deliberately bad pull request proves the retrieval gate blocks a regression. Nothing below is claimed as built until its milestone is done.
 
 ## Quality gates
 
@@ -47,6 +47,14 @@ python scripts\smoke_http.py --base http://127.0.0.1:8000 --mode ci
 docker compose -f deploy/compose.ci.yml down -v
 ```
 
+## Release verification
+
+Every push to `main` passes the CI gates (lint, tests, API contract, a retrieval-quality gate, secret and vulnerability scans, a container scan). The release image is then run exactly as built, under a 512 MB memory limit, against the project's managed Postgres (Neon free plan, pgvector) and its LLM provider, and nine automatic checks must pass: the image matches the commit, the service is healthy and ready, the sample corpus is present, a question returns a cited answer, a nonsense question is refused, uploads are blocked for anonymous callers, and the rate limit triggers. Latest run: https://github.com/HamzaAhmedSharif/Project-7-DocMind-Service/actions/runs/41809139449.
+
+Measured on that run (GitHub-hosted runner, 512 MB container limit, Neon free plan, Frankfurt): readiness 1.102 s, first query 1.98 s, warm query 0.556 s, peak memory 230.8 MiB.
+
+This project has no public instance. No payment card is used anywhere in it, and every free container host checked on 2026-11-04 either required a card or restricted the runtime (see DECISIONS.md). See "Run the container" to run it yourself with Docker.
+
 ## Planned
 
 | Milestone | Deliverable |
@@ -55,7 +63,7 @@ docker compose -f deploy/compose.ci.yml down -v
 | M2 | Service core on fakes: query, citations, errors, request ids, JSON logs (done) |
 | M3 | Postgres and pgvector, ONNX embeddings, retrieval parity and recall gate (done) |
 | M4 | Full CI/CD with quality gates, image build and scan (done) |
-| M5 | Free-tier deployment, landing page, measured numbers |
+| M5 | Release verification against Neon, landing page, measured numbers |
 | M6 | API keys, tenants, rate limits, guardrails, semantic cache |
 | M7 | Metrics, dashboard, load test, capacity model |
 | M8 | Service-level evaluation and write-up |

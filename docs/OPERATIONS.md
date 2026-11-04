@@ -63,3 +63,21 @@ The release image is `ghcr.io/hamzaahmedsharif/docmind-service:sha-<7-char-commi
 - Per-IP limiter: `DEMO_IP_PER_MIN=5` (sliding 60-second window).
 - Daily cap: `DEMO_DAILY_CAP=300` (UTC day, resets at midnight).
 - The release smoke runs on every green `main` CI run and costs at most one provider request.
+
+## Release-smoke and neon-seed workflows
+
+### release-smoke (`.github/workflows/release-smoke.yml`)
+
+- Runs automatically after a successful `ci.yml` run on `main`, and by manual dispatch (`workflow_dispatch`). It never triggers on `pull_request`.
+- Pulls `ghcr.io/hamzaahmedsharif/docmind-service:sha-<7-char-commit>` and runs the nine-check ephemeral smoke under a 512 MB limit against Neon and the real provider.
+- Secrets come from the GitHub environment `release-smoke` (restricted to `main`), by name: `DOCMIND_DATABASE_URL`, `DOCMIND_DATABASE_URL_DIRECT`, `DOCMIND_LLM_API_KEY`. The workflow forwards them with bare `-e NAME`; it never prints them and never runs `set -x`.
+- Costs at most one provider request per run. `python scripts/provider_budget.py --used-today <local-calls>` counts today's release-smoke runs from the workflow-run list (upper bound: one request per run).
+- Failure output: the last 40 container log lines with DSNs redacted; the `smoke.json` artifact is uploaded when available.
+
+### neon-seed (`.github/workflows/neon-seed.yml`)
+
+- Manual only (`workflow_dispatch`); it never runs automatically and never triggers on `pull_request`.
+- Re-run only when the demo corpus changes: it applies migrations (`AUTO_MIGRATE=true`), ingests `evaluation/demo_corpus.json` into Neon, and runs `scripts/check_demo_corpus.py`.
+- Uses the same `release-smoke` environment secrets; same bare `-e NAME` forwarding.
+- The last seed (2026-11-04) created 3 documents / 639 chunks; database 7896 kB -> 11 MB; demo-check top-3 results identical to the local reference file.
+

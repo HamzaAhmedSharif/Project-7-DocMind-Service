@@ -97,3 +97,17 @@ change that cost Project 6 31 percentage points (92.3% → 61.5% key-fact recall
 is stopped at review time here, not discovered after deployment.
 
 Completed 2026-11-03. Pull request: https://github.com/HamzaAhmedSharif/Project-7-DocMind-Service/pull/8 — failing run: https://github.com/HamzaAhmedSharif/Project-7-DocMind-Service/actions/runs/41664131689. The gate table posted on the PR by CI reads: E2 = 0.080 against a >= 0.90 gate (FAIL, gating); E3 = 26/26 against >= 23 (PASS); E1_min and E1_mean both 1.0 (PASS). Lint, unit, security, and image all passed; release was skipped (main-only). The PR was blocked from merging by the branch protection on main and was closed unmerged. The change passed every unit test and every other check, and only the retrieval gate caught it — chunking regressions are now stopped at review time by measurement, not discovered after deployment.
+
+## Release verification
+
+Every push to `main` runs the nine-check release smoke against the release image, managed Postgres (Neon free plan, pgvector) and the real LLM provider, under a 512 MB container limit. The latest green run is https://github.com/HamzaAhmedSharif/Project-7-DocMind-Service/actions/runs/41809139449 (commit `c149900`, 9/9). Conditions: GitHub-hosted runner, 512 MB container limit, Neon free plan, Frankfurt. Numbers: readiness 1.102 s, first query 1.98 s, warm query 0.556 s, peak memory 230.8 MiB.
+
+The nine checks: image revision label equals the commit; `/healthz` 200 and commit matches; `/readyz` database and embedder ok; landing page 200 HTML with CSP; demo documents listed; sample question answered with a citation; nonsense question refused; anonymous upload 403; rapid queries hit the per-IP cap.
+
+What this baseline does not prove:
+
+- public reachability — there is no persistent host; the smoke runs in CI;
+- how a free host behaves when idle — no idle period is exercised;
+- long-running stability — the run is minutes, not days;
+- behavior under real user traffic — the checks are sequential, not a load test.
+
