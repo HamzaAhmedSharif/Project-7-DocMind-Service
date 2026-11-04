@@ -19,7 +19,7 @@ jobs:
   lint:                                     # G1
     runs-on: ubuntu-latest
     steps:
-      - uses: actions/checkout@11d5960a326750d5838078e36cf38b85af677262 # v4
+      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
       - uses: actions/setup-python@a26af69be951a213d495a4c3e4e4022e16d87065 # v5
         with: {python-version: "${{ env.PYTHON_VERSION }}", cache: pip, cache-dependency-path: requirements-dev.txt}
       - run: pip install -r requirements-dev.txt
@@ -29,7 +29,7 @@ jobs:
   unit:                                     # G2 + G3
     runs-on: ubuntu-latest
     steps:
-      - uses: actions/checkout@11d5960a326750d5838078e36cf38b85af677262 # v4
+      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
       - uses: actions/setup-python@a26af69be951a213d495a4c3e4e4022e16d87065 # v5
         with:
           python-version: "${{ env.PYTHON_VERSION }}"
@@ -59,7 +59,7 @@ jobs:
     env:
       DOCMIND_TEST_DATABASE_URL: postgresql://postgres:postgres@localhost:5432/docmind_test
     steps:
-      - uses: actions/checkout@11d5960a326750d5838078e36cf38b85af677262 # v4
+      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
       - uses: actions/setup-python@a26af69be951a213d495a4c3e4e4022e16d87065 # v5
         with:
           python-version: "${{ env.PYTHON_VERSION }}"
@@ -99,7 +99,7 @@ jobs:
       GITLEAKS_VERSION: "8.24.3"
       GITLEAKS_SHA256: "9991e0b2903da4c8f6122b5c3186448b927a5da4deef1fe45271c3793f4ee29c"
     steps:
-      - uses: actions/checkout@11d5960a326750d5838078e36cf38b85af677262 # v4
+      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
         with: {fetch-depth: 0}
       # gitleaks step exactly as fixed in P0.5 (pinned binary, SHA-256 checked, full history)
       - name: Install pinned gitleaks and scan the full history
@@ -118,7 +118,7 @@ jobs:
     runs-on: ubuntu-latest
     needs: [lint, unit]
     steps:
-      - uses: actions/checkout@11d5960a326750d5838078e36cf38b85af677262 # v4
+      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
       - run: docker build -t docmind-service:ci .
       - name: "Trivy (blocking: CRITICAL with a fix available)"
         run: docker run --rm -v /var/run/docker.sock:/var/run/docker.sock aquasec/trivy:0.76.0 image --severity CRITICAL --ignore-unfixed --exit-code 1 --no-progress docmind-service:ci
@@ -146,7 +146,7 @@ jobs:
       contents: read
       packages: write
     steps:
-      - uses: actions/checkout@11d5960a326750d5838078e36cf38b85af677262 # v4
+      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
       - uses: docker/login-action@c94ce9fb468520275223c153574b00df6fe4bcc9 # v3
         with: {registry: ghcr.io, username: "${{ github.actor }}", password: "${{ secrets.GITHUB_TOKEN }}"}
       - run: |
