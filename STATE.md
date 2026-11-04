@@ -1,7 +1,7 @@
 # STATE
 Updated: 2026-11-04 12:30 UTC
 Current milestone: M6 · offline part + provider measurements complete; stopped before M6.10
-Last commit: 66b87ea docs: M6 milestone report (local)
+Last commit: 6b51212 docs: record M6 provider measurements (no-citation, red-team R1) and ledger (local)
 Last pushed head: c149900 · origin/main; M6 commits are local and not pushed
 Evidence branch: evidence/bad-chunking at 427d2c5 (unmerged)
 
