@@ -1,0 +1,34 @@
+{
+  "corpora": [
+    {
+      "id": "nist-ai100-1",
+      "title": "NIST AI Risk Management Framework 1.0 (AI 100-1)",
+      "url": "https://nvlpubs.nist.gov/nistpubs/ai/NIST.AI.100-1.pdf",
+      "sha256": "7576edb531d9848825814ee88e28b1795d3a84b435b4b797d3670eafdc4a89f1",
+      "pages": 48,
+      "license": "Works authored by NIST employees are not subject to Copyright protection within the United States; foreign rights are reserved.",
+      "license_url": "https://www.nist.gov/open/license",
+      "retrieved_on": "2026-11-04"
+    },
+    {
+      "id": "nist-ai600-1",
+      "title": "NIST AI Generative AI Profile (AI 600-1)",
+      "url": "https://nvlpubs.nist.gov/nistpubs/ai/NIST.AI.600-1.pdf",
+      "sha256": "6e73620ab6b64e90ef2c04bf0e0d6246185a2f4b1b13cab0df494496cff89b6a",
+      "pages": 64,
+      "license": "Works authored by NIST employees are not subject to Copyright protection within the United States; foreign rights are reserved.",
+      "license_url": "https://www.nist.gov/open/license",
+      "retrieved_on": "2026-11-04"
+    },
+    {
+      "id": "nist-ai100-2",
+      "title": "NIST AI 100-2 Adversarial Machine Learning Taxonomy",
+      "url": "https://nvlpubs.nist.gov/nistpubs/ai/NIST.AI.100-2e2023.pdf",
+      "sha256": "d1086f53a1634d6787c59510c117b22bb7e1a242f920d2830a0d334058b0cb78",
+      "pages": 107,
+      "license": "Works authored by NIST employees are not subject to Copyright protection within the United States; foreign rights are reserved.",
+      "license_url": "https://www.nist.gov/open/license",
+      "retrieved_on": "2026-11-04"
+    }
+  ]
+}

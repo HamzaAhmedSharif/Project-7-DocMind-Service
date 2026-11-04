@@ -1,0 +1,28 @@
+{
+  "questions": [
+    {
+      "id": "d01",
+      "question": "What is the core purpose of the AI Risk Management Framework?"
+    },
+    {
+      "id": "d02",
+      "question": "What risks does the Generative AI Profile identify for generative AI?"
+    },
+    {
+      "id": "d03",
+      "question": "What are the main components of an adversarial machine learning taxonomy?"
+    },
+    {
+      "id": "d04",
+      "question": "How can organizations implement AI governance?"
+    },
+    {
+      "id": "d05",
+      "question": "What are the emerging standards for AI transparency?"
+    },
+    {
+      "id": "d06",
+      "question": "What are the best practices for AI system monitoring?"
+    }
+  ]
+}

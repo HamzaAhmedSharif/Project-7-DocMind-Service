@@ -1,0 +1,131 @@
+{
+  "tenant": "public",
+  "questions": [
+    {
+      "id": "d01",
+      "question": "What is the core purpose of the AI Risk Management Framework?",
+      "top3": [
+        {
+          "document": "NIST AI Risk Management Framework 1.0 (AI 100-1)",
+          "page": 47,
+          "score": 0.7346
+        },
+        {
+          "document": "NIST AI Risk Management Framework 1.0 (AI 100-1)",
+          "page": 24,
+          "score": 0.7296
+        },
+        {
+          "document": "NIST AI Risk Management Framework 1.0 (AI 100-1)",
+          "page": 25,
+          "score": 0.7183
+        }
+      ]
+    },
+    {
+      "id": "d02",
+      "question": "What risks does the Generative AI Profile identify for generative AI?",
+      "top3": [
+        {
+          "document": "NIST AI Generative AI Profile (AI 600-1)",
+          "page": 5,
+          "score": 0.594
+        },
+        {
+          "document": "NIST AI Generative AI Profile (AI 600-1)",
+          "page": 6,
+          "score": 0.5567
+        },
+        {
+          "document": "NIST AI Risk Management Framework 1.0 (AI 100-1)",
+          "page": 44,
+          "score": 0.5424
+        }
+      ]
+    },
+    {
+      "id": "d03",
+      "question": "What are the main components of an adversarial machine learning taxonomy?",
+      "top3": [
+        {
+          "document": "NIST AI 100-2 Adversarial Machine Learning Taxonomy",
+          "page": 15,
+          "score": 0.6493
+        },
+        {
+          "document": "NIST AI 100-2 Adversarial Machine Learning Taxonomy",
+          "page": 8,
+          "score": 0.5964
+        },
+        {
+          "document": "NIST AI 100-2 Adversarial Machine Learning Taxonomy",
+          "page": 27,
+          "score": 0.5958
+        }
+      ]
+    },
+    {
+      "id": "d04",
+      "question": "How can organizations implement AI governance?",
+      "top3": [
+        {
+          "document": "NIST AI Risk Management Framework 1.0 (AI 100-1)",
+          "page": 41,
+          "score": 0.7007
+        },
+        {
+          "document": "NIST AI Risk Management Framework 1.0 (AI 100-1)",
+          "page": 28,
+          "score": 0.6364
+        },
+        {
+          "document": "NIST AI Risk Management Framework 1.0 (AI 100-1)",
+          "page": 7,
+          "score": 0.6198
+        }
+      ]
+    },
+    {
+      "id": "d05",
+      "question": "What are the emerging standards for AI transparency?",
+      "top3": [
+        {
+          "document": "NIST AI Risk Management Framework 1.0 (AI 100-1)",
+          "page": 20,
+          "score": 0.7362
+        },
+        {
+          "document": "NIST AI Risk Management Framework 1.0 (AI 100-1)",
+          "page": 20,
+          "score": 0.685
+        },
+        {
+          "document": "NIST AI Risk Management Framework 1.0 (AI 100-1)",
+          "page": 21,
+          "score": 0.6816
+        }
+      ]
+    },
+    {
+      "id": "d06",
+      "question": "What are the best practices for AI system monitoring?",
+      "top3": [
+        {
+          "document": "NIST AI Risk Management Framework 1.0 (AI 100-1)",
+          "page": 19,
+          "score": 0.5465
+        },
+        {
+          "document": "NIST AI Risk Management Framework 1.0 (AI 100-1)",
+          "page": 34,
+          "score": 0.4988
+        },
+        {
+          "document": "NIST AI Risk Management Framework 1.0 (AI 100-1)",
+          "page": 20,
+          "score": 0.4975
+        }
+      ]
+    }
+  ]
+}
