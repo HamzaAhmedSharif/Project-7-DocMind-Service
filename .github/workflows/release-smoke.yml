@@ -1,0 +1,40 @@
+name: release-smoke
+on:
+  workflow_run:
+    workflows: [ci]
+    types: [completed]
+    branches: [main]
+  workflow_dispatch:
+permissions:
+  contents: read
+  packages: read
+concurrency:
+  group: release-smoke
+  cancel-in-progress: false
+jobs:
+  smoke:
+    if: ${{ github.event_name == 'workflow_dispatch' || github.event.workflow_run.conclusion == 'success' }}
+    runs-on: ubuntu-latest
+    environment: release-smoke
+    timeout-minutes: 20
+    env:
+      SHA: ${{ github.event.workflow_run.head_sha || github.sha }}
+    steps:
+      - uses: actions/checkout@11d5960a326750d5838078e36cf38b85af677262 # v4
+        with:
+          ref: ${{ env.SHA }}
+      - name: Log in to GHCR
+        run: echo "${{ secrets.GITHUB_TOKEN }}" | docker login ghcr.io -u "${{ github.actor }}" --password-stdin
+      - name: Smoke the release image of this commit
+        env:
+          DOCMIND_DATABASE_URL: ${{ secrets.DOCMIND_DATABASE_URL }}
+          DOCMIND_DATABASE_URL_DIRECT: ${{ secrets.DOCMIND_DATABASE_URL_DIRECT }}
+          DOCMIND_LLM_API_KEY: ${{ secrets.DOCMIND_LLM_API_KEY }}
+        run: bash scripts/run_release_smoke.sh
+      - uses: actions/upload-artifact@ea165f8d65b6e75b540449e92b4886f43607fa02 # v4
+        if: always()
+        with:
+          name: release-smoke-${{ env.SHA }}
+          path: |
+            smoke.json
+            mem.txt

@@ -17,3 +17,5 @@ STATE.md
 OPEN_QUESTIONS.md
 reports/
 .tmp/
+smoke.json
+mem.txt

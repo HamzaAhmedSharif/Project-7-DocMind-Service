@@ -1,0 +1,14 @@
+{
+  "date": "2026-11-04",
+  "model": "openai/gpt-oss-120b",
+  "ok": true,
+  "prompt_tokens": 78,
+  "completion_tokens": 18,
+  "api_seconds": 2.684,
+  "headers": {
+    "x-ratelimit-limit-requests": "1000",
+    "x-ratelimit-limit-tokens": "8000",
+    "x-ratelimit-remaining-requests": "999",
+    "x-ratelimit-remaining-tokens": "7540"
+  }
+}
