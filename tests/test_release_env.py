@@ -23,4 +23,8 @@ def test_release_env_is_non_secret_and_has_the_expected_keys():
         "DOCMIND_LOG_LEVEL",
         "DOCMIND_DEMO_DAILY_CAP",
         "DOCMIND_DEMO_IP_PER_MIN",
+        "DOCMIND_EVIDENCE_MIN_SCORE",
+        "DOCMIND_CACHE_ENABLED",
+        "DOCMIND_CACHE_THRESHOLD",
+        "DOCMIND_REQUIRE_CITATION",
     ]
