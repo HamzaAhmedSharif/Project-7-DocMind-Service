@@ -1,8 +1,8 @@
 # STATE
 Updated: 2026-11-05 (overnight, Asia/Shanghai)
 Current milestone: M7 · complete (L1 PASS, MEM PASS, drills verified; provider requests 0) — M7.8 live checks on the pushed head recorded below after the push
-Last commit: HEADHASH
-Last pushed head: HEADHASH · origin/main
+Last commit: 64f095f
+Last pushed head: 64f095f · origin/main
 Evidence branch: evidence/bad-chunking at 427d2c5 (unmerged)
 
 ## Milestones
@@ -15,7 +15,7 @@ Evidence branch: evidence/bad-chunking at 427d2c5 (unmerged)
 | M4 | PASS-WITH-NOTES | reports/M4.md | beb6731, e1b816d, 123e697, ca18652, f4ecd92 | 2026-11-03 |
 | M5 | PASS-WITH-NOTES (Amendment A1 Path C) | reports/M5.md | e5bfe5a | 2026-11-04 |
 | M6 | PASS-WITH-NOTES | reports/M6.md | e3cfb2c | 2026-11-05 |
-| M7 | complete — verdict in the manager's morning report | reports/M7.md | 46591eb, d410e3c, 472cc07, C4HASH | 2026-11-05 |
+| M7 | complete — verdict in the manager's morning report | reports/M7.md | 46591eb, d410e3c, 472cc07, 64f095f | 2026-11-05 |
 
 ## M7 verification (2026-11-05, local, fake provider — 0 provider requests)
 - **Load matrix** (`evaluation/results/load-m7.json`): 102,937 requests across the §9 matrix; every run HTTP 200, 0 timeouts, 0 OOM kills under `-m 512m`. Headline: unconstrained c10 mixed 113.6 rps, p95 0.107 s; soak 69,927 requests/600 s, memory 208.4 → 208.1 MB.
