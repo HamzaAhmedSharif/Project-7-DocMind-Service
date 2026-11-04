@@ -73,7 +73,7 @@ class QueryLogWriter:
                         ),
                     )
         except Exception as exc:  # noqa: BLE001 - the request must not fail
-            logger.warning("query log write failed [%s]", type(exc).__name__)
+            logger.warning(f"query log write failed [{type(exc).__name__}]")
         return counts
 
     def purge_old(self) -> int:
