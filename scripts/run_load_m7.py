@@ -209,6 +209,5 @@ print(f"Load test report written to {OUTPUT_PATH}")
 # Optionally run gates checks
 os.system("python evaluation/check_gates.py --results evaluation/results/load-m7.json --stage load")
 os.system(
-    "python evaluation/check_gates.py"
-    " --results evaluation/results/load-m7.json --stage memory"
+    "python evaluation/check_gates.py --results evaluation/results/load-m7.json --stage memory"
 )

@@ -108,14 +108,8 @@ def main():
         pending = set()
         idx = 0
         while pending or (time.time() - start_time) < args.duration:
-            while len(pending) < args.concurrency and (
-                time.time() - start_time
-            ) < args.duration:
-                pending.add(
-                    executor.submit(
-                        do_request, args.base, questions[idx % len(questions)]
-                    )
-                )
+            while len(pending) < args.concurrency and (time.time() - start_time) < args.duration:
+                pending.add(executor.submit(do_request, args.base, questions[idx % len(questions)]))
                 idx += 1
             if not pending:
                 break

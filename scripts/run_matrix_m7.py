@@ -136,9 +136,7 @@ def make_pool(scenario: str, answered: list[str]) -> list[str]:
     return pool
 
 
-def run_load(
-    concurrency: int, duration: int, pool: list[str], sample_every: float = 2.0
-) -> dict:
+def run_load(concurrency: int, duration: int, pool: list[str], sample_every: float = 2.0) -> dict:
     samples: list[float] = []
     stop = threading.Event()
 
@@ -204,14 +202,19 @@ def run_load(
 
 
 def main() -> int:
-    dq = json.loads(
-        (ROOT / "evaluation" / "demo_questions.json").read_text(encoding="utf-8")
-    )
+    dq = json.loads((ROOT / "evaluation" / "demo_questions.json").read_text(encoding="utf-8"))
     answered = [q["question"] for q in dq["questions"]]
     runs: list[dict] = []
 
-    def one(profile: str, conc: int, scenario: str, cache: bool, duration: int = 60,
-            sample_every: float = 2.0, reuse: bool = False) -> dict:
+    def one(
+        profile: str,
+        conc: int,
+        scenario: str,
+        cache: bool,
+        duration: int = 60,
+        sample_every: float = 2.0,
+        reuse: bool = False,
+    ) -> dict:
         if not reuse:
             start_container(profile, cache)
         print(f"RUN profile={profile} c={conc} scenario={scenario} cache={cache}", flush=True)
@@ -259,14 +262,17 @@ def main() -> int:
     start_container("unconstrained", False)
     print("RUN soak c=5 mixed 600s", flush=True)
     soak = run_load(5, 600, make_pool("mixed", answered), sample_every=10.0)
-    soak.update(profile="unconstrained", concurrency=5, scenario="mixed-soak",
-                cache_enabled=False, duration_requested_s=600)
+    soak.update(
+        profile="unconstrained",
+        concurrency=5,
+        scenario="mixed-soak",
+        cache_enabled=False,
+        duration_requested_s=600,
+    )
     soak["oom_killed"] = stop_container()
     soak_samples = soak.pop("mem_samples")
     soak["mem_first_minute_end_mb"] = (
-        soak_samples[6]
-        if len(soak_samples) > 6
-        else (soak_samples[-1] if soak_samples else None)
+        soak_samples[6] if len(soak_samples) > 6 else (soak_samples[-1] if soak_samples else None)
     )
     soak["mem_samples_10s"] = soak_samples
     runs.append(soak)
@@ -282,9 +288,7 @@ def main() -> int:
     headline = next(
         r
         for r in runs
-        if r["profile"] == "unconstrained"
-        and r["concurrency"] == 10
-        and r["scenario"] == "mixed"
+        if r["profile"] == "unconstrained" and r["concurrency"] == 10 and r["scenario"] == "mixed"
     )
     doc = {
         "requests": headline["requests"],

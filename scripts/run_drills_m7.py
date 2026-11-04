@@ -184,33 +184,25 @@ def drill_uploads():
         f.write(b"0" * 11 * 1024 * 1024)
 
     # We use curl --form to upload
-    res = run(
-        f'curl -s -i -F "file=@oversized.pdf" -H "X-API-Key: {key}" {BASE_URL}/v1/documents'
-    )
+    res = run(f'curl -s -i -F "file=@oversized.pdf" -H "X-API-Key: {key}" {BASE_URL}/v1/documents')
     print(f"11MB file: {res.stdout.splitlines()[0] if res.stdout else 'Error'}")
 
     # 2. Text renamed to .pdf (422)
     with open("text.pdf", "w") as f:
         f.write("This is not a PDF")
-    res = run(
-        f'curl -s -i -F "file=@text.pdf" -H "X-API-Key: {key}" {BASE_URL}/v1/documents'
-    )
+    res = run(f'curl -s -i -F "file=@text.pdf" -H "X-API-Key: {key}" {BASE_URL}/v1/documents')
     print(f"Text as PDF: {res.stdout.splitlines()[0] if res.stdout else 'Error'}")
 
     # 3. Encrypted PDF (422) - using a dummy file
     with open("encrypted.pdf", "wb") as f:
         f.write(b"FakeEncryptedPDFContent")
-    res = run(
-        f'curl -s -i -F "file=@encrypted.pdf" -H "X-API-Key: {key}" {BASE_URL}/v1/documents'
-    )
+    res = run(f'curl -s -i -F "file=@encrypted.pdf" -H "X-API-Key: {key}" {BASE_URL}/v1/documents')
     print(f"Encrypted PDF: {res.stdout.splitlines()[0] if res.stdout else 'Error'}")
 
     # 4. 0-byte file (422)
     with open("empty.pdf", "wb") as f:
         pass
-    res = run(
-        f'curl -s -i -F "file=@empty.pdf" -H "X-API-Key: {key}" {BASE_URL}/v1/documents'
-    )
+    res = run(f'curl -s -i -F "file=@empty.pdf" -H "X-API-Key: {key}" {BASE_URL}/v1/documents')
     print(f"0-byte file: {res.stdout.splitlines()[0] if res.stdout else 'Error'}")
 
     # Memory check
