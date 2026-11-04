@@ -1,0 +1,89 @@
+{
+  "id": 0,
+  "uid": "docmind",
+  "title": "DocMind Service",
+  "schemaVersion": 16,
+  "panels": [
+    {
+      "id": 1,
+      "type": "graph",
+      "targets": [
+        {"refId": "A", "expr": "sum(rate(docmind_http_requests_total[1m]))"}
+      ]
+    },
+    {
+      "id": 2,
+      "type": "graph",
+      "targets": [
+        {"refId": "A", "expr": "histogram_quantile(0.95, sum(rate(docmind_http_request_duration_seconds_bucket[1m])) by (le,route))"}
+      ]
+    },
+    {
+      "id": 3,
+      "type": "graph",
+      "targets": [
+        {"refId": "A", "expr": "sum by(status) (docmind_http_requests_total)"}
+      ]
+    },
+    {
+      "id": 4,
+      "type": "graph",
+      "targets": [
+        {"refId": "A", "expr": "sum by(outcome) (docmind_query_total)"}
+      ]
+    },
+    {
+      "id": 5,
+      "type": "graph",
+      "targets": [
+        {"refId": "A", "expr": "sum by(result)(docmind_cache_total) / ignoring(result) sum(docmind_cache_total)"}
+      ]
+    },
+    {
+      "id": 6,
+      "type": "graph",
+      "targets": [
+        {"refId": "A", "expr": "rate(docmind_llm_calls_total[1h])"}
+      ]
+    },
+    {
+      "id": 7,
+      "type": "graph",
+      "targets": [
+        {"refId": "A", "expr": "histogram_quantile(0.95, sum(rate(docmind_llm_wait_seconds_bucket[1m])) by (le))"}
+      ]
+    },
+    {
+      "id": 8,
+      "type": "graph",
+      "targets": [
+        {"refId": "A", "expr": "sum by(kind) (docmind_llm_tokens_total)"}
+      ]
+    },
+    {
+      "id": 9,
+      "type": "graph",
+      "targets": [
+        {"refId": "A", "expr": "sum by(kind)(docmind_guardrail_total)"}
+      ]
+    },
+    {
+      "id": 10,
+      "type": "graph",
+      "targets": [
+        {"refId": "A", "expr": "docmind_db_pool{state=\"size\"}"}
+      ]
+    },
+    {
+      "id": 11,
+      "type": "graph",
+      "targets": [
+        {"refId": "A", "expr": "process_resident_memory_bytes"}
+      ]
+    }
+  ],
+  "time": {
+    "from": "now-6h",
+    "to": "now"
+  }
+}

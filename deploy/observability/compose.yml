@@ -1,0 +1,45 @@
+# Local observability stack for M7.2
+# Contains the application, a demo database, Prometheus, and Grafana.
+# All ports are bound to localhost only.
+
+services:
+  app:
+    image: docmind-service:m7
+    environment:
+      - DOCMIND_LLM_PROVIDER=fake
+      - DOCMIND_AUTO_MIGRATE=true
+    # Expose only to localhost to avoid accidental exposure.
+    ports:
+      - "127.0.0.1:8001:8000"
+
+  db:
+    image: pgvector/pgvector:pg17
+    environment:
+      POSTGRES_USER: postgres
+      POSTGRES_PASSWORD: ""
+      POSTGRES_DB: docmind
+      POSTGRES_HOST_AUTH_METHOD: trust
+    # Port for local tests; no external exposure.
+    ports:
+      - "127.0.0.1:5434:5432"
+    volumes:
+      - ./pgdata:/var/lib/postgresql/data
+
+  prometheus:
+    image: quay.io/prometheus/prometheus:v2.52.0
+    command:
+      - "--config.file=/etc/prometheus/prometheus.yml"
+    volumes:
+      - ./prometheus.yml:/etc/prometheus/prometheus.yml
+    ports:
+      - "127.0.0.1:9090:9090"
+
+  grafana:
+    image: grafana/grafana:9.5.9
+    environment:
+      - GF_SECURITY_ADMIN_PASSWORD=admin
+    volumes:
+      - ./provisioning/datasources:/etc/grafana/provisioning/datasources
+      - ./provisioning/dashboards:/etc/grafana/provisioning/dashboards
+    ports:
+      - "127.0.0.1:3000:3000"
