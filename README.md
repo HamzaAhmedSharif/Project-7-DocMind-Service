@@ -55,6 +55,10 @@ Measured on that run (GitHub-hosted runner, 512 MB container limit, Neon free pl
 
 This project has no public instance. No payment card is used anywhere in it, and every free container host checked on 2026-11-04 either required a card or restricted the runtime (see DECISIONS.md). See "Run the container" to run it yourself with Docker.
 
+### M6.10 live verification (local)
+
+Under Amendment A1 there is no public host and no `DEMO_URL`, so the M6.10 live key checks are run against the release image executed locally with a local database (`DOCMIND_UPLOADS_ENABLED=true` for this local run only; it stays `false` in the release config per A1.3). `scripts/live_key_check.ps1` reads `$env:DOCMIND_SMOKE_KEY` and prints only `PASS`/`FAIL` lines for: bad key 401; list with key 200; upload tiny generated PDF 201; same upload again 200 duplicate; query that document 200 with a citation; same query again `cache == "hit"`; delete 204; list again, document gone; anonymous upload 403. All nine checks passed locally against commit `703a842`. Hamza creates his own key (tenant `hamza-demo`, label `portfolio`, `--write`) against this local instance and runs the same check against `http://127.0.0.1:8000`; he does not use Neon for this step. The manager's anonymous checks against the same local instance were: sample question 200 with citations; off-topic question refused `low_evidence` with the daily counter unmoved; rate-limit headers present on `/v1/query`; `query_log` rows present after the test queries; `admin show-log --last 3` shows redacted text only. No live demo is claimed and no key material is recorded here.
+
 ## Security and limits
 
 The service is not hosted publicly. The M5 release image is verified in CI; the M6 key, tenant, guardrail and cache features are built and tested offline, and the live key checks are part of M6.10. This section describes the design and the offline evidence, not a public deployment.

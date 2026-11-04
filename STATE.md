@@ -1,6 +1,6 @@
 # STATE
 Updated: 2026-11-04 12:30 UTC
-Current milestone: M6 · offline part + provider measurements complete; stopped before M6.10
+Current milestone: M6 · complete including M6.10 live key verification (local, per Amendment A1)
 Last commit: 6b51212 docs: record M6 provider measurements (no-citation, red-team R1) and ledger (local)
 Last pushed head: c149900 · origin/main; M6 commits are local and not pushed
 Evidence branch: evidence/bad-chunking at 427d2c5 (unmerged)
@@ -14,7 +14,7 @@ Evidence branch: evidence/bad-chunking at 427d2c5 (unmerged)
 | M3 | done (manager released M4) | reports/M3.md | 1538e20 (M3c) + FIX commits 992ee80 | 2026-11-03 |
 | M4 | built, pushed to origin/main; manager verdict not recorded | reports/M4.md | beb6731, e1b816d, 123e697, ca18652, f4ecd92 | 2026-11-03 |
 | M5 | G8-C green; documents round complete; awaiting manager verdict | reports/M5.md | c149900 (pushed) + docs round (local) | 2026-11-04 |
-| M6 | offline part + provider measurements measured; stopped before M6.10 | reports/M6.md | d62681d, a173df0, 66b87ea + measurement commit (local) | 2026-11-04 |
+| M6 | complete incl. M6.10 live key verification (local, per Amendment A1) | reports/M6.md | d62681d, a173df0, 66b87ea + measurement commit (local) + M6.10 local verification (local) | 2026-11-04 |
 
 ## M5 verification (Amendment A1)
 - **G8-C:** release-smoke run 41809139449 (manual dispatch, head `c149900`), 9/9 PASS — https://github.com/HamzaAhmedSharif/Project-7-DocMind-Service/actions/runs/41809139449.
@@ -55,7 +55,7 @@ Evidence branch: evidence/bad-chunking at 427d2c5 (unmerged)
 ## Notes for the next session
 1. Manager: verdict on M6 (offline part + provider measurements; R1 PASS 0/15, no-citation 1/12 keeps `REQUIRE_CITATION=true`).
 2. No push of the M6 commits; `c149900` is the pushed head.
-3. M6.10 (Neon/live key checks, [H8]) is not started; no public host and no `DEMO_URL` per Amendment A1.
+3. M6.10 live key verification completed locally under Amendment A1 (no public host, no `DEMO_URL`); release image `703a842` run locally with a local database, `live_key_check.ps1` 9/9 PASS, manager checks run verbatim (see `reports/M6.md`).
 4. Provider budget: `used_today=76`, upper bound 80 of 800; M6-round calls 75 (attempts 112) of the 150-request M6 budget.
 5. gitleaks full history and staged scan: no leaks found (verbatim in `reports/M5.md`).
 6. `docs/FACTS.md` is new; every row cites a source file or run URL.
