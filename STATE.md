@@ -1,6 +1,6 @@
 # STATE
 Updated: 2026-11-05 (overnight, Asia/Shanghai)
-Current milestone: M7 · complete (L1 PASS, MEM PASS, drills verified; provider requests 0) — M7.8 live checks on the pushed head recorded below after the push
+Current milestone: M7 - complete incl. M7.8 (CI + release-smoke green on c07ebc9); next is M8
 Last commit: 64f095f
 Last pushed head: 64f095f · origin/main
 Evidence branch: evidence/bad-chunking at 427d2c5 (unmerged)
@@ -22,7 +22,7 @@ Evidence branch: evidence/bad-chunking at 427d2c5 (unmerged)
 - **Gates, re-run by the manager on the committed JSON:** `check_gates.py --stage load` → L1 PASS (0); `--stage memory` → MEM PASS (225.8 ≤ 480).
 - **Drills:** 1) DB down → 503 + `Retry-After: 30` + `retrieval_error`, recovery 2.3 s (first run exposed a 500 from the cache path — fixed, regression tests in `tests/test_db_down.py`); 2) provider down → 503 `provider_error`; 3) cap=1 → 200, 429 `daily_cap_reached` + `Retry-After`, refusal still 200; 4) cold start 1.69/1.77 s; 5) uploads 413/422/422/422, 204.7 MiB after. Drills 2/3/5 ran against an isolated drill database (the daily cap is Postgres-backed and shared).
 - **Suite:** `pytest -q` 248 passed, 19 deselected; `ruff check .` clean.
-- **M7.8 (Amendment A1 mapping):** M78TEXT
+- **M7.8 (Amendment A1 mapping):** CI run 41930809098 SUCCESS (all six jobs) and release-smoke run 41931308339 SUCCESS (9/9 G8-C) on head c07ebc9. The /metrics access rule was verified locally on the release-class image: prod + no token -> 404; token set -> 401 without or with a wrong token, 200 with the correct one. [H10] on a live host stays optional/skipped under A1 (no persistent host).
 
 ## M5 verification (Amendment A1)
 - **G8-C:** release-smoke run 41809139449 (manual dispatch, head `c149900`), 9/9 PASS — https://github.com/HamzaAhmedSharif/Project-7-DocMind-Service/actions/runs/41809139449.
