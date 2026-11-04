@@ -1,0 +1,18 @@
+{
+  "variant": "G8-C",
+  "date": "2026-11-04",
+  "commit": "c149900",
+  "run_id": 41809139449,
+  "run_url": "https://github.com/HamzaAhmedSharif/Project-7-DocMind-Service/actions/runs/41809139449",
+  "conclusion": "success",
+  "checks": 9,
+  "checks_passed": 9,
+  "conditions": "GitHub-hosted runner, 512 MB container limit, Neon free plan, Frankfurt",
+  "numbers": {
+    "readyz_first_latency_s": 1.102,
+    "first_query_latency_s": 1.98,
+    "warm_query_latency_s": 0.556,
+    "mem_peak_mib": 230.8
+  },
+  "provider_requests": 1
+}

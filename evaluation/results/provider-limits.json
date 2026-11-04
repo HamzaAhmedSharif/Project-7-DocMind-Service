@@ -10,5 +10,14 @@
     "x-ratelimit-limit-tokens": "8000",
     "x-ratelimit-remaining-requests": "999",
     "x-ratelimit-remaining-tokens": "7539"
+  },
+  "release_smoke": {
+    "runs": [
+      { "id": 41805063857, "commit": "ac97221", "requests": 0 },
+      { "id": 41807161569, "commit": "c149900", "requests": 0 },
+      { "id": 41809139449, "commit": "c149900", "requests": 1 }
+    ],
+    "requests_total": 1,
+    "counting_rule": "at most 1 provider request per release-smoke run; provider_budget.py counts runs from the workflow-run list"
   }
 }
