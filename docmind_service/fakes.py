@@ -1,8 +1,9 @@
 import re
+import secrets
 from datetime import UTC, datetime
 from uuid import UUID, uuid4
 
-from docmind_service.domain import DocumentRecord, LLMResult, RetrievedChunk
+from docmind_service.domain import DocumentRecord, LLMResult, QuotaExceeded, RetrievedChunk
 
 DEMO_DOCUMENT_ID = UUID("00000000-0000-4000-8000-000000000001")
 
@@ -63,6 +64,7 @@ class InMemoryRetriever:
         tenant_id: str = "public",
         document_ids: list[UUID] | None,
         top_k: int,
+        query_vector=None,
     ) -> list[RetrievedChunk]:
         wanted = tokens(question)
         if not wanted:
@@ -91,6 +93,7 @@ class InMemoryDocumentStore:
 
     def __init__(self) -> None:
         self.records: dict[tuple[str, str], DocumentRecord] = {}
+        self.corpus_versions: dict[str, str] = {}
 
     def ping(self) -> None:
         return None
@@ -99,12 +102,29 @@ class InMemoryDocumentStore:
         return 384
 
     def add_document(
-        self, *, tenant_id, sha256, filename, pages, chunks, embeddings
+        self,
+        *,
+        tenant_id,
+        sha256,
+        filename,
+        pages,
+        chunks,
+        embeddings,
+        max_documents=None,
+        max_pages=None,
     ) -> tuple[DocumentRecord, bool]:
         key = (tenant_id, sha256)
         existing = self.records.get(key)
         if existing is not None:
             return existing, False
+        if max_documents is not None or max_pages is not None:
+            mine = [record for (tenant, _), record in self.records.items() if tenant == tenant_id]
+            if max_documents is not None and len(mine) >= max_documents:
+                raise QuotaExceeded(
+                    f"This tenant already has {len(mine)} of {max_documents} documents."
+                )
+            if max_pages is not None and sum(r.pages for r in mine) + pages > max_pages:
+                raise QuotaExceeded(f"This upload would exceed the {max_pages}-page tenant limit.")
         record = DocumentRecord(
             document_id=uuid4(),
             tenant_id=tenant_id,
@@ -115,7 +135,11 @@ class InMemoryDocumentStore:
             created_at=datetime.now(UTC),
         )
         self.records[key] = record
+        self.corpus_versions[tenant_id] = secrets.token_hex(8)
         return record, True
+
+    def get_corpus_version(self, tenant_id: str) -> str:
+        return self.corpus_versions.get(tenant_id, "0")
 
     def list_documents(self, *, tenant_id: str) -> list[DocumentRecord]:
         return [record for (tenant, _), record in self.records.items() if tenant == tenant_id]
@@ -124,6 +148,7 @@ class InMemoryDocumentStore:
         for key, record in list(self.records.items()):
             if key[0] == tenant_id and record.document_id == document_id:
                 del self.records[key]
+                self.corpus_versions[tenant_id] = secrets.token_hex(8)
                 return True
         return False
 
@@ -132,8 +157,12 @@ class FakeLLM:
     """Deterministic stand-in for a language model: cites the first context chunk."""
 
     def complete(self, prompt: str) -> LLMResult:
-        match = re.search(r"\[(c\d+)\]", prompt.split("Context:", 1)[-1])
-        cited = f" [{match.group(1)}]" if match else ""
+        delimiter = re.search(r"<<<c(\d+)", prompt)
+        if delimiter:
+            cited = f" [c{delimiter.group(1)}]"
+        else:
+            match = re.search(r"\[(c\d+)\]", prompt.split("Context:", 1)[-1])
+            cited = f" [{match.group(1)}]" if match else ""
         text = f"Based on the provided context{cited}, here is a short grounded answer."
         return LLMResult(
             text=text,

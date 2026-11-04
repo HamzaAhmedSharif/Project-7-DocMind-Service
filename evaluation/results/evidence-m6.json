@@ -1,0 +1,143 @@
+{
+  "corpus": "attention",
+  "generated_at": "2026-11-04T10:52:01.528944+00:00",
+  "tenant": "evidence-paper",
+  "n_chunks": 49,
+  "rule": "t = floor_to_2_decimals(min(top-1 of answerable) - 0.02)",
+  "questions": [
+    {
+      "id": "d01",
+      "type": "doc",
+      "question": "What is self-attention, as defined in the Transformer paper?",
+      "top1_score": 0.519879,
+      "top1_chunk_id": "44d57e55-0801-4e34-a1a4-7f4b30d29f7f:8",
+      "top1_page": 2
+    },
+    {
+      "id": "d02",
+      "type": "doc",
+      "question": "Which attention function does the Transformer use, and how is it computed?",
+      "top1_score": 0.570676,
+      "top1_chunk_id": "44d57e55-0801-4e34-a1a4-7f4b30d29f7f:14",
+      "top1_page": 5
+    },
+    {
+      "id": "d03",
+      "type": "doc",
+      "question": "Why are the dot products scaled by the square root of the key dimension d_k?",
+      "top1_score": 0.452104,
+      "top1_chunk_id": "44d57e55-0801-4e34-a1a4-7f4b30d29f7f:12",
+      "top1_page": 4
+    },
+    {
+      "id": "d04",
+      "type": "doc",
+      "question": "How many identical layers do the encoder and the decoder each have in the base Transformer, and what are the two sub-layers of an encoder layer?",
+      "top1_score": 0.628059,
+      "top1_chunk_id": "44d57e55-0801-4e34-a1a4-7f4b30d29f7f:9",
+      "top1_page": 3
+    },
+    {
+      "id": "d05",
+      "type": "doc",
+      "question": "What are the model dimension and the number of attention heads used in the base Transformer?",
+      "top1_score": 0.611458,
+      "top1_chunk_id": "44d57e55-0801-4e34-a1a4-7f4b30d29f7f:14",
+      "top1_page": 5
+    },
+    {
+      "id": "d06",
+      "type": "doc",
+      "question": "What is multi-head attention and why does the paper use it?",
+      "top1_score": 0.592143,
+      "top1_chunk_id": "44d57e55-0801-4e34-a1a4-7f4b30d29f7f:13",
+      "top1_page": 4
+    },
+    {
+      "id": "d07",
+      "type": "doc",
+      "question": "How does the Transformer give the model information about the order of tokens?",
+      "top1_score": 0.373703,
+      "top1_chunk_id": "44d57e55-0801-4e34-a1a4-7f4b30d29f7f:8",
+      "top1_page": 2
+    },
+    {
+      "id": "d08",
+      "type": "doc",
+      "question": "Which optimizer and learning-rate warmup did the authors use to train the Transformer?",
+      "top1_score": 0.625067,
+      "top1_chunk_id": "44d57e55-0801-4e34-a1a4-7f4b30d29f7f:26",
+      "top1_page": 7
+    },
+    {
+      "id": "d09",
+      "type": "doc",
+      "question": "Which regularization techniques were used during training?",
+      "top1_score": 0.507512,
+      "top1_chunk_id": "44d57e55-0801-4e34-a1a4-7f4b30d29f7f:26",
+      "top1_page": 7
+    },
+    {
+      "id": "d10",
+      "type": "doc",
+      "question": "What BLEU scores did the big Transformer reach on WMT 2014 English-to-German and English-to-French?",
+      "top1_score": 0.696186,
+      "top1_chunk_id": "44d57e55-0801-4e34-a1a4-7f4b30d29f7f:28",
+      "top1_page": 8
+    },
+    {
+      "id": "d11",
+      "type": "doc",
+      "question": "Why does the paper argue that self-attention is preferable to recurrent and convolutional layers?",
+      "top1_score": 0.680795,
+      "top1_chunk_id": "44d57e55-0801-4e34-a1a4-7f4b30d29f7f:20",
+      "top1_page": 6
+    },
+    {
+      "id": "d12",
+      "type": "doc",
+      "question": "What is the purpose of masking in the decoder's self-attention?",
+      "top1_score": 0.565925,
+      "top1_chunk_id": "44d57e55-0801-4e34-a1a4-7f4b30d29f7f:15",
+      "top1_page": 5
+    },
+    {
+      "id": "a01",
+      "type": "absent",
+      "question": "According to the paper, what accuracy did the Transformer reach on the ImageNet image classification task?",
+      "top1_score": 0.382135,
+      "top1_chunk_id": "44d57e55-0801-4e34-a1a4-7f4b30d29f7f:35",
+      "top1_page": 10
+    },
+    {
+      "id": "a02",
+      "type": "absent",
+      "question": "According to the paper, what BLEU score did the Transformer reach on English-to-Chinese translation?",
+      "top1_score": 0.585539,
+      "top1_chunk_id": "44d57e55-0801-4e34-a1a4-7f4b30d29f7f:28",
+      "top1_page": 8
+    },
+    {
+      "id": "a03",
+      "type": "absent",
+      "question": "According to the paper, what word error rate did the model reach on a speech recognition benchmark?",
+      "top1_score": 0.455893,
+      "top1_chunk_id": "44d57e55-0801-4e34-a1a4-7f4b30d29f7f:30",
+      "top1_page": 8
+    },
+    {
+      "id": "a04",
+      "type": "absent",
+      "question": "According to the paper, how many kilowatt-hours of energy did training the big model consume?",
+      "top1_score": 0.382975,
+      "top1_chunk_id": "44d57e55-0801-4e34-a1a4-7f4b30d29f7f:25",
+      "top1_page": 7
+    }
+  ],
+  "min_answerable_top1": 0.373703,
+  "threshold": 0.35,
+  "absent_total": 4,
+  "absent_below_threshold": 0,
+  "absent_below_ids": [],
+  "provider_requests": 0
+}

@@ -138,6 +138,17 @@
       "Problem": {
         "description": "RFC 9457 problem details. Every error response uses this shape.",
         "properties": {
+          "code": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Code"
+          },
           "detail": {
             "anyOf": [
               {
@@ -375,7 +386,7 @@
     }
   },
   "info": {
-    "description": "Production-style RAG service over DocMind. Errors use application/problem+json (RFC 9457). API keys are declared in this contract and enforced from milestone M6.",
+    "description": "RAG service over DocMind. Errors use application/problem+json (RFC 9457). X-API-Key is optional: keyed tenants get isolated documents and their own limits.",
     "license": {
       "name": "MIT"
     },
@@ -544,6 +555,16 @@
             },
             "description": "Unauthorized (application/problem+json)"
           },
+          "403": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Problem"
+                }
+              }
+            },
+            "description": "Forbidden (application/problem+json)"
+          },
           "411": {
             "content": {
               "application/json": {
@@ -634,6 +655,16 @@
               }
             },
             "description": "Unauthorized (application/problem+json)"
+          },
+          "403": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Problem"
+                }
+              }
+            },
+            "description": "Forbidden (application/problem+json)"
           },
           "404": {
             "content": {
@@ -730,6 +761,16 @@
               }
             },
             "description": "Unauthorized (application/problem+json)"
+          },
+          "403": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Problem"
+                }
+              }
+            },
+            "description": "Forbidden (application/problem+json)"
           },
           "422": {
             "content": {

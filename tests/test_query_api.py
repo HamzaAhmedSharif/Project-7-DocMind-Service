@@ -46,7 +46,7 @@ def test_query_refuses_without_calling_the_llm_when_nothing_matches(make_client)
     body = response.json()
     assert response.status_code == 200
     assert body["refused"] is True
-    assert body["refusal_reason"] == "no_evidence"
+    assert body["refusal_reason"] == "low_evidence"
     assert body["citations"] == []
     assert body["usage"]["calls"] == 0
     assert llm.prompts == []
@@ -56,7 +56,7 @@ def test_query_respects_the_document_filter(make_client):
     llm = ScriptedLLM([])
     payload = {**QUESTION, "document_ids": [str(uuid4())]}
     response = make_client(llm=llm).post("/v1/query", json=payload)
-    assert response.json()["refusal_reason"] == "no_evidence"
+    assert response.json()["refusal_reason"] == "low_evidence"
     assert llm.prompts == []
 
 
@@ -109,7 +109,7 @@ def test_top_k_above_the_limit_is_rejected(make_client):
 def test_a_falsy_retriever_is_still_used(make_client):
     response = make_client(retriever=FalsyRetriever()).post("/v1/query", json=QUESTION)
     assert response.status_code == 200
-    assert response.json()["refusal_reason"] == "no_evidence"
+    assert response.json()["refusal_reason"] == "low_evidence"
 
 
 def test_document_ids_must_have_between_1_and_100_entries(make_client):

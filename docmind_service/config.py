@@ -40,6 +40,24 @@ class Settings(BaseSettings):
     demo_ip_per_min: int = 5
     trust_proxy_hops: int = 0
 
+    auth_cache_seconds: int = Field(default=60, ge=0)
+    key_rpm: int = Field(default=30, ge=1)
+    key_daily_queries: int = Field(default=200, ge=1)
+    key_max_documents: int = Field(default=20, ge=1)
+    key_max_pages: int = Field(default=500, ge=1)
+    global_daily_llm_cap: int = Field(default=800, ge=1)
+
+    guardrails_enabled: bool = True
+    require_citation: bool = True
+    canary: str | None = None
+    max_answer_chars: int = Field(default=4000, ge=1)
+    evidence_min_score: float = Field(default=0.2, ge=0.0, le=1.0)
+
+    cache_enabled: bool = True
+    cache_threshold: float = Field(default=0.86, ge=0.0, le=1.0)
+    cache_ttl_days: int = Field(default=30, ge=1)
+    query_log_days: int = Field(default=30, ge=1)
+
     @property
     def database_url_value(self) -> str | None:
         return self.database_url.get_secret_value() if self.database_url else None

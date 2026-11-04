@@ -54,7 +54,8 @@ def test_page_text_mentions_limits_and_privacy():
     html = (ROOT / "docmind_service" / "static" / "index.html").read_text(encoding="utf-8")
     assert "5 questions per minute" in html
     assert "300 questions per day" in html
-    assert "This demo does not store your questions." in html
+    assert "Questions asked here are stored for 30 days" in html
+    assert "Do not enter personal data." in html
 
 
 def test_uploads_disabled_returns_403():

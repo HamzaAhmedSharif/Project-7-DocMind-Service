@@ -34,6 +34,9 @@ def make_client():
         embedder=None,
         settings=None,
         raise_server_exceptions=True,
+        auth_store=None,
+        query_log=None,
+        cache=None,
     ):
         app = create_app(
             settings=settings or Settings(_env_file=None),
@@ -41,6 +44,9 @@ def make_client():
             llm=llm,
             store=store,
             embedder=embedder,
+            auth_store=auth_store,
+            query_log=query_log,
+            cache=cache,
         )
         return TestClient(app, raise_server_exceptions=raise_server_exceptions)
 

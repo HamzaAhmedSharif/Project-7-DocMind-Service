@@ -1,0 +1,11 @@
+{
+  "note": "Six off-topic questions for the demo-corpus evidence calibration. They must be answerable by nothing in the demo corpus.",
+  "questions": [
+    {"id": "o01", "question": "How long should I roast a chicken in the oven?"},
+    {"id": "o02", "question": "Who won the 2022 FIFA World Cup?"},
+    {"id": "o03", "question": "What is the best way to grow tomatoes in a small garden?"},
+    {"id": "o04", "question": "How do I change a flat car tyre safely?"},
+    {"id": "o05", "question": "What are the rules of cricket?"},
+    {"id": "o06", "question": "How do I bake sourdough bread at home?"}
+  ]
+}

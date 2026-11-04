@@ -14,6 +14,7 @@ class Problem(BaseModel):
     detail: str | None = None
     instance: str | None = None
     request_id: str | None = None
+    code: str | None = None
 
 
 class HealthOut(BaseModel):

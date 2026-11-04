@@ -47,6 +47,7 @@ class Retriever(Protocol):
         tenant_id: str,
         document_ids: list[UUID] | None,
         top_k: int,
+        query_vector=None,
     ) -> list[RetrievedChunk]: ...
 
 
@@ -91,3 +92,11 @@ class ProviderError(Exception):
 
 class RetrievalError(Exception):
     """The retrieval backend failed or is unavailable."""
+
+
+class QuotaExceeded(Exception):
+    """A tenant would exceed its document or page quota."""
+
+    def __init__(self, detail: str):
+        self.detail = detail
+        super().__init__(detail)

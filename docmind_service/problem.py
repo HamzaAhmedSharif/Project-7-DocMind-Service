@@ -35,6 +35,7 @@ def problem_response(
     detail: str | None = None,
     headers: dict[str, str] | None = None,
     request_id: str | None = None,
+    code: str | None = None,
 ) -> JSONResponse:
     """Build an RFC 9457 problem details response that carries the request id."""
     body = Problem(
@@ -42,6 +43,7 @@ def problem_response(
         status=status,
         detail=detail,
         request_id=request_id or request_id_var.get(),
+        code=code,
     )
     return JSONResponse(
         body.model_dump(exclude_none=True),
@@ -87,10 +89,11 @@ async def retrieval_error_handler(request: Request, exc: RetrievalError) -> JSON
 async def limit_exceeded_handler(request: Request, exc: LimitExceeded) -> JSONResponse:
     retry_after = str(max(1, math.ceil(exc.retry_after)))
     if exc.code == "daily_cap_reached":
-        detail = "The demo's daily question cap has been reached. Try again after midnight UTC."
+        detail = "The daily question cap has been reached. Try again after midnight UTC."
     else:
         detail = "Too many requests from this address. Try again shortly."
-    return problem_response(429, detail, headers={"Retry-After": retry_after})
+    headers = {**exc.headers, "Retry-After": retry_after}
+    return problem_response(429, detail, headers=headers, code=exc.code)
 
 
 async def unhandled_exception_handler(request: Request, exc: Exception) -> JSONResponse:

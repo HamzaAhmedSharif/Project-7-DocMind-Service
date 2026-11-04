@@ -1,16 +1,30 @@
-import re
 from dataclasses import dataclass
 from uuid import UUID
 
 from docmind_service.domain import LLMClient, LLMResult, RetrievedChunk, Retriever
+from docmind_service.guardrails import (
+    PROMPT_VERSION,
+    build_prompt_v2,
+    parse_citations,
+    validate_output,
+)
 
-PROMPT_VERSION = "p7-v1"
+__all__ = [
+    "MIN_EVIDENCE_SCORE",
+    "NO_EVIDENCE_ANSWER",
+    "PROMPT_TEMPLATE",
+    "PROMPT_VERSION",
+    "PROMPT_VERSION_V1",
+    "QueryResult",
+    "answer_question",
+    "build_prompt",
+    "parse_citations",
+]
+
+PROMPT_VERSION_V1 = "p7-v1"
 NO_EVIDENCE_ANSWER = "I could not find relevant information in the indexed documents."
-# M6 makes this a measured setting; M5 needs nonsense questions to refuse.
+# The off arm (M3 behavior) keeps this fixed threshold; M6 makes the on arm measured.
 MIN_EVIDENCE_SCORE = 0.2
-_CITATION = re.compile(r"[\[【](c\d+)[\]】]")
-# gpt-oss emits zero-width spaces inside citation brackets, e.g. "[\u200bc1]".
-_ZERO_WIDTH = re.compile("[\u200b\u200c\u200d\u2060\ufeff]")
 
 PROMPT_TEMPLATE = """Answer the question using only the context below. If the context does not \
 contain the answer, say so clearly.
@@ -38,29 +52,11 @@ class QueryResult:
 def build_prompt(
     question: str, chunks: list[RetrievedChunk]
 ) -> tuple[str, dict[str, RetrievedChunk]]:
-    """Render the prompt and the map from short ids (c1, c2, ...) to chunks."""
+    """Render the M3 prompt and the map from short ids (c1, c2, ...) to chunks."""
     mapping = {f"c{i}": chunk for i, chunk in enumerate(chunks, start=1)}
     blocks = [f"[{short}] (page {chunk.page})\n{chunk.text}" for short, chunk in mapping.items()]
     prompt = PROMPT_TEMPLATE.format(context="\n\n".join(blocks), question=question)
     return prompt, mapping
-
-
-def parse_citations(
-    answer: str, mapping: dict[str, RetrievedChunk]
-) -> tuple[list[RetrievedChunk], int]:
-    """Chunks cited in the answer, in order of first appearance, and the count of unknown ids."""
-    cited: list[RetrievedChunk] = []
-    seen: set[str] = set()
-    invalid = 0
-    for short in _CITATION.findall(_ZERO_WIDTH.sub("", answer)):
-        if short in seen:
-            continue
-        seen.add(short)
-        if short in mapping:
-            cited.append(mapping[short])
-        else:
-            invalid += 1
-    return cited, invalid
 
 
 def answer_question(
@@ -71,10 +67,33 @@ def answer_question(
     llm: LLMClient,
     document_ids: list[UUID] | None,
     top_k: int,
+    query_vector=None,
+    guardrails_enabled: bool = False,
+    evidence_min_score: float = MIN_EVIDENCE_SCORE,
+    canary: str | None = None,
+    require_citation: bool = True,
+    max_answer_chars: int = 4000,
 ) -> QueryResult:
+    extra = {"query_vector": query_vector} if query_vector is not None else {}
     chunks = retriever.retrieve(
-        question, tenant_id=tenant_id, document_ids=document_ids, top_k=top_k
+        question, tenant_id=tenant_id, document_ids=document_ids, top_k=top_k, **extra
     )
+    if guardrails_enabled:
+        chunks = [chunk for chunk in chunks if chunk.score >= evidence_min_score]
+        if not chunks:
+            return QueryResult(NO_EVIDENCE_ANSWER, [], True, "low_evidence", None, 0, 0)
+        prompt, mapping = build_prompt_v2(question, chunks, canary or "")
+        result = llm.complete(prompt)
+        answer, cited, refused, reason, invalid = validate_output(
+            result.text,
+            mapping,
+            canary=canary,
+            require_citation=require_citation,
+            chunk_texts=[chunk.text for chunk in chunks],
+            max_answer_chars=max_answer_chars,
+        )
+        return QueryResult(answer, cited, refused, reason, result, invalid, len(chunks))
+
     chunks = [chunk for chunk in chunks if chunk.score >= MIN_EVIDENCE_SCORE]
     if not chunks:
         return QueryResult(NO_EVIDENCE_ANSWER, [], True, "no_evidence", None, 0, 0)

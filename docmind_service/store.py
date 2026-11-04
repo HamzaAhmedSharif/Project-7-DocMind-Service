@@ -1,3 +1,4 @@
+import secrets
 from uuid import UUID, uuid4
 
 import numpy as np
@@ -5,7 +6,13 @@ import psycopg
 from psycopg_pool import ConnectionPool, PoolTimeout
 
 from docmind_service.chunking import Chunk
-from docmind_service.domain import DocumentRecord, Embedder, RetrievalError, RetrievedChunk
+from docmind_service.domain import (
+    DocumentRecord,
+    Embedder,
+    QuotaExceeded,
+    RetrievalError,
+    RetrievedChunk,
+)
 
 
 def _vector(values) -> str:
@@ -53,6 +60,8 @@ class PgStore:
         pages: int,
         chunks: list[Chunk],
         embeddings: np.ndarray,
+        max_documents: int | None = None,
+        max_pages: int | None = None,
     ) -> tuple[DocumentRecord, bool]:
         vectors = np.asarray(embeddings, dtype=np.float32)
         if vectors.shape != (len(chunks), self.dim):
@@ -64,20 +73,35 @@ class PgStore:
         document_id = uuid4()
         with self.pool.connection() as conn:
             with conn.transaction():
+                existing = conn.execute(
+                    "SELECT document_id, tenant_id, sha256, filename, pages, created_at, "
+                    "chunk_count FROM documents WHERE tenant_id = %s AND sha256 = %s",
+                    (tenant_id, sha256),
+                ).fetchone()
+                if existing is not None:
+                    return self._record(existing), False
+                if max_documents is not None or max_pages is not None:
+                    used = conn.execute(
+                        "SELECT count(*), coalesce(sum(pages), 0) FROM documents "
+                        "WHERE tenant_id = %s",
+                        (tenant_id,),
+                    ).fetchone()
+                    if max_documents is not None and used[0] >= max_documents:
+                        raise QuotaExceeded(
+                            f"This tenant already has {used[0]} of {max_documents} documents."
+                        )
+                    if max_pages is not None and used[1] + pages > max_pages:
+                        raise QuotaExceeded(
+                            f"This upload would exceed the {max_pages}-page tenant limit."
+                        )
                 row = conn.execute(
                     "INSERT INTO documents "
                     "(document_id, tenant_id, sha256, filename, pages, chunk_count) "
                     "VALUES (%s, %s, %s, %s, %s, %s) "
-                    "ON CONFLICT (tenant_id, sha256) DO NOTHING "
                     "RETURNING document_id, tenant_id, sha256, filename, pages, created_at, "
                     "chunk_count",
                     (document_id, tenant_id, sha256, filename, pages, len(chunks)),
                 ).fetchone()
-                if row is None:
-                    existing = self._find(tenant_id, sha256)
-                    if existing is None:
-                        raise RuntimeError("conflict without an existing document")
-                    return existing, False
                 with conn.cursor() as cursor:
                     cursor.executemany(
                         "INSERT INTO chunks "
@@ -96,7 +120,24 @@ class PgStore:
                             for chunk, vector in zip(chunks, vectors, strict=True)
                         ],
                     )
+                self._touch_tenant(conn, tenant_id)
         return self._record(row), True
+
+    @staticmethod
+    def _touch_tenant(conn, tenant_id: str) -> None:
+        conn.execute(
+            "INSERT INTO tenants (tenant_id, corpus_version) VALUES (%s, %s) "
+            "ON CONFLICT (tenant_id) DO UPDATE SET corpus_version = EXCLUDED.corpus_version, "
+            "updated_at = now()",
+            (tenant_id, secrets.token_hex(8)),
+        )
+
+    def get_corpus_version(self, tenant_id: str) -> str:
+        with self.pool.connection() as conn:
+            row = conn.execute(
+                "SELECT corpus_version FROM tenants WHERE tenant_id = %s", (tenant_id,)
+            ).fetchone()
+        return row[0] if row else "0"
 
     def _record(self, row) -> DocumentRecord:
         return DocumentRecord(
@@ -121,11 +162,14 @@ class PgStore:
 
     def delete_document(self, *, tenant_id: str, document_id: UUID) -> bool:
         with self.pool.connection() as conn:
-            row = conn.execute(
-                "DELETE FROM documents WHERE tenant_id = %s AND document_id = %s "
-                "RETURNING document_id",
-                (tenant_id, document_id),
-            ).fetchone()
+            with conn.transaction():
+                row = conn.execute(
+                    "DELETE FROM documents WHERE tenant_id = %s AND document_id = %s "
+                    "RETURNING document_id",
+                    (tenant_id, document_id),
+                ).fetchone()
+                if row is not None:
+                    self._touch_tenant(conn, tenant_id)
         return row is not None
 
     def retrieve(
@@ -135,8 +179,13 @@ class PgStore:
         tenant_id: str,
         document_ids: list[UUID] | None,
         top_k: int,
+        query_vector=None,
     ) -> list[RetrievedChunk]:
-        vector = np.asarray(self.embedder.embed_query(question), dtype=np.float32)
+        vector = (
+            np.asarray(query_vector, dtype=np.float32)
+            if query_vector is not None
+            else np.asarray(self.embedder.embed_query(question), dtype=np.float32)
+        )
         if vector.shape != (self.dim,):
             raise ValueError(f"query embedding shape {vector.shape}, expected ({self.dim},)")
         if top_k < 1:

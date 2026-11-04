@@ -21,8 +21,13 @@ class SlidingWindowLimiter:
 
     def allow(self, key: str) -> tuple[bool, float]:
         """Return ``(allowed, retry_after_seconds)``."""
+        allowed, retry, _, _ = self.allow_status(key)
+        return allowed, retry
+
+    def allow_status(self, key: str) -> tuple[bool, float, int, float]:
+        """Return ``(allowed, retry_after, remaining, reset_seconds)``."""
         if self.limit <= 0:
-            return False, self.window_seconds
+            return False, self.window_seconds, 0, self.window_seconds
         now = self._clock()
         bucket = self._keys.setdefault(key, deque())
         while bucket and now - bucket[0] >= self.window_seconds:
@@ -32,9 +37,11 @@ class SlidingWindowLimiter:
             allowed, retry = True, 0.0
         else:
             allowed, retry = False, bucket[0] + self.window_seconds - now
+        remaining = max(0, self.limit - len(bucket))
+        reset = 0.0 if remaining > 0 else bucket[0] + self.window_seconds - now
         if len(self._keys) > self._max_keys:
             self._evict()
-        return allowed, max(retry, 0.0)
+        return allowed, max(retry, 0.0), remaining, max(reset, 0.0)
 
     def _evict(self) -> None:
         for key in [k for k, bucket in self._keys.items() if not bucket]:
@@ -76,23 +83,24 @@ class DailyCap:
 
 
 class LimitExceeded(Exception):
-    def __init__(self, code: str, retry_after: float = 0.0):
+    def __init__(self, code: str, retry_after: float = 0.0, headers: dict | None = None):
         self.code = code
         self.retry_after = retry_after
+        self.headers = headers or {}
         super().__init__(code)
 
 
 class CappedLLM:
-    """Increment the daily counter before each provider call; raise when over the cap."""
+    """Increment every configured daily counter before each provider call."""
 
-    def __init__(self, inner, cap: DailyCap, scope: str = "public"):
+    def __init__(self, inner, cap: DailyCap | None = None, scope: str = "public", *, checks=None):
         self.inner = inner
-        self.cap = cap
-        self.scope = scope
+        self.checks = checks if checks is not None else [(scope, cap)]
 
     def complete(self, prompt: str):
-        if self.cap.increment(self.scope) > self.cap.limit:
-            raise LimitExceeded("daily_cap_reached", self.cap.seconds_until_midnight())
+        for scope, cap in self.checks:
+            if cap.increment(scope) > cap.limit:
+                raise LimitExceeded("daily_cap_reached", cap.seconds_until_midnight())
         return self.inner.complete(prompt)
 
 

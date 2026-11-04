@@ -1,0 +1,118 @@
+{
+  "corpus": "demo",
+  "generated_at": "2026-11-04T10:56:41.229445+00:00",
+  "tenant": "evidence-demo",
+  "n_chunks": 639,
+  "rule": "t = floor_to_2_decimals(min(top-1 of answerable) - 0.02)",
+  "questions": [
+    {
+      "id": "d01",
+      "type": "answerable",
+      "question": "What is the core purpose of the AI Risk Management Framework?",
+      "top1_score": 0.734565,
+      "top1_chunk_id": "d6b0c79a-a49b-4c71-8d97-2a8ee40f6a53:125",
+      "top1_page": 47
+    },
+    {
+      "id": "d02",
+      "type": "answerable",
+      "question": "What risks does the Generative AI Profile identify for generative AI?",
+      "top1_score": 0.594002,
+      "top1_chunk_id": "29027bc7-c28a-410a-9a6d-67e2e6063cbe:5",
+      "top1_page": 5
+    },
+    {
+      "id": "d03",
+      "type": "answerable",
+      "question": "What are the main components of an adversarial machine learning taxonomy?",
+      "top1_score": 0.649285,
+      "top1_chunk_id": "0e63b4a5-cc84-478e-ba14-1c8f6b9799c2:42",
+      "top1_page": 15
+    },
+    {
+      "id": "d04",
+      "type": "answerable",
+      "question": "How can organizations implement AI governance?",
+      "top1_score": 0.700687,
+      "top1_chunk_id": "d6b0c79a-a49b-4c71-8d97-2a8ee40f6a53:109",
+      "top1_page": 41
+    },
+    {
+      "id": "d05",
+      "type": "answerable",
+      "question": "What are the emerging standards for AI transparency?",
+      "top1_score": 0.736194,
+      "top1_chunk_id": "d6b0c79a-a49b-4c71-8d97-2a8ee40f6a53:52",
+      "top1_page": 20
+    },
+    {
+      "id": "d06",
+      "type": "answerable",
+      "question": "What are the best practices for AI system monitoring?",
+      "top1_score": 0.546457,
+      "top1_chunk_id": "d6b0c79a-a49b-4c71-8d97-2a8ee40f6a53:47",
+      "top1_page": 19
+    },
+    {
+      "id": "o01",
+      "type": "offtopic",
+      "question": "How long should I roast a chicken in the oven?",
+      "top1_score": 0.111239,
+      "top1_chunk_id": "0e63b4a5-cc84-478e-ba14-1c8f6b9799c2:202",
+      "top1_page": 62
+    },
+    {
+      "id": "o02",
+      "type": "offtopic",
+      "question": "Who won the 2022 FIFA World Cup?",
+      "top1_score": 0.213967,
+      "top1_chunk_id": "0e63b4a5-cc84-478e-ba14-1c8f6b9799c2:291",
+      "top1_page": 90
+    },
+    {
+      "id": "o03",
+      "type": "offtopic",
+      "question": "What is the best way to grow tomatoes in a small garden?",
+      "top1_score": 0.129266,
+      "top1_chunk_id": "29027bc7-c28a-410a-9a6d-67e2e6063cbe:141",
+      "top1_page": 54
+    },
+    {
+      "id": "o04",
+      "type": "offtopic",
+      "question": "How do I change a flat car tyre safely?",
+      "top1_score": 0.196797,
+      "top1_chunk_id": "d6b0c79a-a49b-4c71-8d97-2a8ee40f6a53:127",
+      "top1_page": 47
+    },
+    {
+      "id": "o05",
+      "type": "offtopic",
+      "question": "What are the rules of cricket?",
+      "top1_score": 0.300073,
+      "top1_chunk_id": "0e63b4a5-cc84-478e-ba14-1c8f6b9799c2:12",
+      "top1_page": 5
+    },
+    {
+      "id": "o06",
+      "type": "offtopic",
+      "question": "How do I bake sourdough bread at home?",
+      "top1_score": 0.133286,
+      "top1_chunk_id": "0e63b4a5-cc84-478e-ba14-1c8f6b9799c2:125",
+      "top1_page": 39
+    }
+  ],
+  "min_answerable_top1": 0.546457,
+  "threshold": 0.52,
+  "absent_total": 6,
+  "absent_below_threshold": 6,
+  "absent_below_ids": [
+    "o01",
+    "o02",
+    "o03",
+    "o04",
+    "o05",
+    "o06"
+  ],
+  "provider_requests": 0
+}

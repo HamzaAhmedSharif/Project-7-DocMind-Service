@@ -1,6 +1,8 @@
 from datetime import UTC, datetime
 from uuid import UUID, uuid4
 
+from docmind_service.auth import InMemoryAuthStore
+from docmind_service.config import Settings
 from docmind_service.domain import DocumentRecord
 from docmind_service.embedding import HashingEmbedder
 from docmind_service.fakes import ScriptedLLM
@@ -19,7 +21,18 @@ class FakeStore:
     def embedding_dimension(self):
         return 384
 
-    def add_document(self, *, tenant_id, sha256, filename, pages, chunks, embeddings):
+    def add_document(
+        self,
+        *,
+        tenant_id,
+        sha256,
+        filename,
+        pages,
+        chunks,
+        embeddings,
+        max_documents=None,
+        max_pages=None,
+    ):
         key = (tenant_id, sha256)
         existing = self.records.get(key)
         if existing is not None:
@@ -61,17 +74,25 @@ class BrokenStore(FakeStore):
         raise RuntimeError("database secret detail")
 
 
-def upload(client, data=None, filename="paper.pdf"):
+def keyed(make_client, store, embedder, settings=None):
+    auth = InMemoryAuthStore()
+    _, key = auth.create(tenant_id="t1", scopes=["read", "write"])
+    client = make_client(store=store, embedder=embedder, auth_store=auth, settings=settings)
+    return client, {"X-API-Key": key}
+
+
+def upload(client, data=None, filename="paper.pdf", headers=None):
     return client.post(
         "/v1/documents",
         files={"file": (filename, data or make_pdf([LONG]), "application/pdf")},
+        headers=headers,
     )
 
 
 def test_upload_list_and_delete_roundtrip(make_client):
     store = FakeStore()
-    client = make_client(store=store, embedder=HashingEmbedder())
-    response = upload(client)
+    client, headers = keyed(make_client, store, HashingEmbedder())
+    response = upload(client, headers=headers)
     assert response.status_code == 201
     body = response.json()
     assert body["filename"] == "paper.pdf"
@@ -79,36 +100,41 @@ def test_upload_list_and_delete_roundtrip(make_client):
     assert body["chunks"] >= 1
     assert len(body["sha256"]) == 64
 
-    again = upload(client)
+    again = upload(client, headers=headers)
     assert again.status_code == 200
     assert again.json()["document_id"] == body["document_id"]
 
-    listed = client.get("/v1/documents")
+    listed = client.get("/v1/documents", headers=headers)
     assert listed.status_code == 200
     assert [item["document_id"] for item in listed.json()["items"]] == [body["document_id"]]
 
-    deleted = client.delete(f"/v1/documents/{body['document_id']}")
+    deleted = client.delete(f"/v1/documents/{body['document_id']}", headers=headers)
     assert deleted.status_code == 204
     assert deleted.content == b""
-    assert client.get("/v1/documents").json()["items"] == []
-    assert client.delete(f"/v1/documents/{body['document_id']}").status_code == 404
+    assert client.get("/v1/documents", headers=headers).json()["items"] == []
+    assert client.delete(f"/v1/documents/{body['document_id']}", headers=headers).status_code == 404
 
 
 def test_upload_rejects_non_pdf_and_oversized_files(make_client):
-    client = make_client(store=FakeStore(), embedder=HashingEmbedder())
-    non_pdf = client.post("/v1/documents", files={"file": ("x.txt", b"not a pdf", "text/plain")})
+    client, headers = keyed(make_client, FakeStore(), HashingEmbedder())
+    non_pdf = client.post(
+        "/v1/documents",
+        files={"file": ("x.txt", b"not a pdf", "text/plain")},
+        headers=headers,
+    )
     assert non_pdf.status_code == 422
     assert non_pdf.headers["content-type"].startswith("application/problem+json")
 
-    from docmind_service.config import Settings
-
-    small_limit = make_client(
-        store=FakeStore(),
-        embedder=HashingEmbedder(),
+    small_limit, small_headers = keyed(
+        make_client,
+        FakeStore(),
+        HashingEmbedder(),
         settings=Settings(_env_file=None, max_upload_mb=1),
     )
     too_big = small_limit.post(
-        "/v1/documents", files={"file": ("big.pdf", b"x" * (1024 * 1024 + 1), "application/pdf")}
+        "/v1/documents",
+        files={"file": ("big.pdf", b"x" * (1024 * 1024 + 1), "application/pdf")},
+        headers=small_headers,
     )
     assert too_big.status_code == 413
     assert "MB" in too_big.json()["detail"]
@@ -122,13 +148,14 @@ def test_upload_without_extractable_text_is_422(make_client):
         extract_pages(data, max_pages=10)
     except IngestError as exc:
         assert exc.code == "no_text"
-    response = upload(make_client(store=FakeStore(), embedder=HashingEmbedder()), data)
+    client, headers = keyed(make_client, FakeStore(), HashingEmbedder())
+    response = upload(client, data, headers=headers)
     assert response.status_code == 422
 
 
 def test_store_failure_is_a_safe_503(make_client):
-    client = make_client(store=BrokenStore(), embedder=HashingEmbedder())
-    response = upload(client)
+    client, headers = keyed(make_client, BrokenStore(), HashingEmbedder())
+    response = upload(client, headers=headers)
     assert response.status_code == 503
     assert response.headers["content-type"].startswith("application/problem+json")
     assert "secret detail" not in response.text

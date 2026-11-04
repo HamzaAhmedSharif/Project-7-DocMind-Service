@@ -47,6 +47,7 @@ def add(store, tenant, *, sha=None, text="self attention is useful"):
 @pytest.mark.integration
 def test_migrations_are_idempotent_and_report_the_version(dsn):
     assert "001_init" in migration_status(dsn)
+    assert "003_tenancy_cache_logs" in migration_status(dsn)
     assert migrate(dsn) == []
 
 
@@ -131,23 +132,57 @@ def test_query_through_pg_store(store, make_client):
 
 @pytest.mark.integration
 def test_upload_list_delete_through_the_api(store, make_client):
+    from docmind_service.auth import InMemoryAuthStore
     from docmind_service.embedding import HashingEmbedder
     from docmind_service.fakes import ScriptedLLM
     from scripts.make_tiny_pdf import make_pdf
 
+    auth = InMemoryAuthStore()
+    _, key = auth.create(tenant_id="t1", scopes=["read", "write"])
+    headers = {"X-API-Key": key}
     text = f"unique {uuid4().hex} " + "This page has enough extracted text to pass. " * 4
     data = make_pdf([text])
-    client = make_client(store=store, embedder=HashingEmbedder(), llm=ScriptedLLM([]))
-    first = client.post("/v1/documents", files={"file": ("paper.pdf", data, "application/pdf")})
+    client = make_client(
+        store=store,
+        embedder=HashingEmbedder(),
+        llm=ScriptedLLM([]),
+        auth_store=auth,
+    )
+    first = client.post(
+        "/v1/documents",
+        files={"file": ("paper.pdf", data, "application/pdf")},
+        headers=headers,
+    )
     assert first.status_code == 201
     document_id = first.json()["document_id"]
-    second = client.post("/v1/documents", files={"file": ("paper.pdf", data, "application/pdf")})
+    second = client.post(
+        "/v1/documents",
+        files={"file": ("paper.pdf", data, "application/pdf")},
+        headers=headers,
+    )
     assert second.status_code == 200
     assert second.json()["document_id"] == document_id
     assert document_id in {
-        item["document_id"] for item in client.get("/v1/documents").json()["items"]
+        item["document_id"] for item in client.get("/v1/documents", headers=headers).json()["items"]
     }
-    assert client.delete(f"/v1/documents/{document_id}").status_code == 204
+    assert client.delete(f"/v1/documents/{document_id}", headers=headers).status_code == 204
+
+
+@pytest.mark.integration
+def test_corpus_version_changes_on_add_and_delete(store):
+    tenant = f"v-{uuid4().hex}"
+    assert store.get_corpus_version(tenant) == "0"
+    first, _ = add(store, tenant, sha="1" * 64)
+    version_after_add = store.get_corpus_version(tenant)
+    assert version_after_add != "0"
+    _, created = add(store, tenant, sha="1" * 64)
+    assert created is False
+    assert store.get_corpus_version(tenant) == version_after_add
+    assert store.delete_document(tenant_id=tenant, document_id=first.document_id) is True
+    assert store.get_corpus_version(tenant) != version_after_add
+    version_after_delete = store.get_corpus_version(tenant)
+    assert store.delete_document(tenant_id=tenant, document_id=first.document_id) is False
+    assert store.get_corpus_version(tenant) == version_after_delete
 
 
 @pytest.mark.integration
