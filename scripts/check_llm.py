@@ -9,6 +9,7 @@ from openai import OpenAI
 
 from docmind_service.config import get_settings
 from docmind_service.db import load_dotenv, load_local_env
+from evaluation.ledger import record as ledger_record
 
 HEADERS = (
     "x-ratelimit-limit-requests",
@@ -75,6 +76,7 @@ def main(argv: list[str] | None = None) -> int:
             + "\n",
             encoding="utf-8",
         )
+        ledger_record("check_llm", 1)
         return 0
     except Exception as exc:
         print(f"provider call failed: {type(exc).__name__}")

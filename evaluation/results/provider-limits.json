@@ -1,28 +1,14 @@
 {
-  "date": "2026-11-04",
+  "date": "2026-11-06",
   "model": "openai/gpt-oss-120b",
   "ok": true,
   "prompt_tokens": 78,
-  "completion_tokens": 28,
-  "api_seconds": 4.01,
+  "completion_tokens": 18,
+  "api_seconds": 1.784,
   "headers": {
     "x-ratelimit-limit-requests": "1000",
     "x-ratelimit-limit-tokens": "8000",
     "x-ratelimit-remaining-requests": "999",
-    "x-ratelimit-remaining-tokens": "7539"
-  },
-  "release_smoke": {
-    "runs": [
-      { "id": 41805063857, "commit": "ac97221", "requests": 0 },
-      { "id": 41807161569, "commit": "c149900", "requests": 0 },
-      { "id": 41809139449, "commit": "c149900", "requests": 1 }
-    ],
-    "requests_total": 1,
-    "counting_rule": "at most 1 provider request per release-smoke run; provider_budget.py counts runs from the workflow-run list"
-  },
-  "m6_budget": {
-    "release_smoke_runs": 4,
-    "used_today": 76,
-    "used_today_upper_bound": 80
+    "x-ratelimit-remaining-tokens": "7543"
   }
 }
