@@ -1,0 +1,55 @@
+{
+  "inputs": {
+    "tpm": 8000,
+    "rpd": 1000,
+    "rpm": 30,
+    "tpd": 200000,
+    "mean_prompt_tokens": 2321.8,
+    "mean_completion_tokens": 177.06666666666666,
+    "mean_api_seconds": 5.106261256133318,
+    "calls_per_query": 1,
+    "global_cap": 800,
+    "demo_daily_cap": 300,
+    "demo_per_ip_per_min": 5,
+    "cache_scenarios": {
+      "h=0": 0.0,
+      "h=measured": 0.36363636363636365,
+      "h=0.5": 0.5
+    },
+    "multi_token_ratio": 2.2883939038686987,
+    "multi_call_factor": 3.1,
+    "service_sustained_rps_render_like": {
+      "concurrency_10": 4.679,
+      "concurrency_5": 5.806
+    },
+    "pooled_answered_n": 15,
+    "cache_hit_rate_measured": 0.36363636363636365,
+    "sources": {
+      "tpm_rpd": "evaluation/results/provider-limits.json (response headers, 2026-11-06)",
+      "rpm_tpd": "Groq published free-plan table for openai/gpt-oss-120b, retrieved 2026-11-06",
+      "token_means": "evaluation/results/service-eval-m8.json runs A and B pooled, answered requests only",
+      "service_rps": "evaluation/results/capacity-inputs-m7.json",
+      "cache_hit_rate": "evaluation/results/cache-m6.json test half at tau 0.86; a similarity-evaluation hit rate on a hand-written probe set, not production traffic"
+    }
+  },
+  "outputs": {
+    "tokens_per_query": 2498.866666666667,
+    "qpm_tokens": 2.881306192140437,
+    "qpm_requests": 27.0,
+    "qpm": 2.881306192140437,
+    "daily_provider_bound_answered": 80.03628311501214,
+    "served_per_day_scenarios": {
+      "h=0": 80.03628311501214,
+      "h=measured": 125.77130203787623,
+      "h=0.5": 160.07256623002428
+    },
+    "in_flight_provider_calls": 0.24521170293306227,
+    "multi_agent_derived": {
+      "label": "derived from Project 6 measurements; the service does not implement multi mode",
+      "tokens_per_query": 5718.391246580696,
+      "calls_per_query": 3.1,
+      "qpm": 1.259095380069566,
+      "daily_provider_bound_answered": 34.97487166859905
+    }
+  }
+}
