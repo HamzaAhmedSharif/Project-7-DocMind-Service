@@ -44,3 +44,41 @@ Every public number with its source and conditions. A number quoted without its 
 | Drill 4 — cold start | `/healthz` 1.69 s, `/readyz` 1.77 s | local container, release image | `docs/OPERATIONS.md` | 472cc07 | 2026-11-05 |
 | Drill 5 — uploads | 413 / 422 / 422 / 422 (11 MB / not-a-PDF / fake-encrypted / empty); 204.7 MiB after | keyed uploads via the `X-API-Key` header; isolated drill database | `docs/OPERATIONS.md` | 472cc07 | 2026-11-05 |
 | Provider requests in M7 | 0 | all load and drill evidence used the fake provider (drill 2 pointed the hosted provider at a dead local address) | `reports/M7.md` | 472cc07 | 2026-11-05 |
+| Service eval S1, run A | 10 / 26 key facts | shipped configuration (evidence 0.35, citations required, guardrails on), local image `docmind-service:m8` at 512 MB, fresh eval database, paper uploaded through the API (49 chunks); merged record: the original run crossed a transient provider 503 cluster and 5 questions were re-run under the failure rule (d08 a provider casualty, 503 on three attempts) | `evaluation/results/service-eval-m8.json` | 0694bc4 | 2026-11-06 |
+| Service eval S1, run B | 16 / 26 key facts | same conditions as run A; no provider failures in this run | `evaluation/results/service-eval-m8.json` | 0694bc4 | 2026-11-06 |
+| Service eval S2 | 4 / 4 abstentions in both runs | absent questions a01–a04; abstention = refused flag or a Project 6 abstention pattern | `evaluation/results/service-eval-m8.json` | 0694bc4 | 2026-11-06 |
+| Service eval S3 | valid-citation share 1.000 in both runs; answers-with-citation 0.875 (A) / 1.000 (B) | citations validated against the eval database; the validator's invalid-citation counter moved by 0 in both runs | `evaluation/results/service-eval-m8.json` | 0694bc4 | 2026-11-06 |
+| Service eval S4 | 0.667 (A) / 0.875 (B) | share of found key facts whose cited chunk contains the fact's pattern | `evaluation/results/service-eval-m8.json` | 0694bc4 | 2026-11-06 |
+| Service eval S5 | mean prompt tokens 2002 (A) / 2351 (B) | answered and refused queries both counted; ceiling 3200 | `evaluation/results/service-eval-m8.json` | 0694bc4 | 2026-11-06 |
+| S1 shortfall decomposition | evidence gate 5 facts (d07, d09); grounding refusals 4 facts (d03, d11); partial answer 1 fact (d12) | offline retrieval probe against the eval database with the app's own embedder; zero provider calls; refused drafts are not returned by the API, so the validator mechanism is inferred from refusal reasons | `docs/EVALUATION.md` | 0694bc4 | 2026-11-06 |
+| Capacity: provider-bound throughput | 2.88 queries/minute; 80.0 answered queries/day | Groq free plan (TPM 8,000, TPD 200,000) at the measured 2,498.9 tokens per answered query; min(RPD 1000, global cap 800, TPD / tokens) | `evaluation/results/capacity-m8.json` | 9f042e4 | 2026-11-06 |
+| Capacity: served per day scenarios | 80.0 (cache 0) / 125.8 (cache 0.3636) / 160.1 (cache 0.5) | the 0.3636 rate is the M6 probe-set measurement, labelled a scenario, not traffic | `evaluation/results/capacity-m8.json` | 9f042e4 | 2026-11-06 |
+| Held-out manifest | 24 papers: 8 each cs.CL, cs.IR, cs.LG, submitted from 2026-01-01 in submission order, 6–25 pages, ≥ 500 extractable chars/page | selection procedure fixed in advance, no cherry-picking; PDFs kept out of git; model documented knowledge cutoff 2024-06 | `evaluation/heldout/manifest.json` | 9f042e4 | 2026-11-06 |
+| M8 provider requests, 2026-11-06 | 45 | check_llm 1, run A 11, run A repairs 5, d08 retry 0, run B 28; milestone cap 100, day cap 60 | `reports/provider-ledger.csv` | 0694bc4 | 2026-11-06 |
+
+## Allowed claims
+
+Sentences this project may make, because each is backed above:
+
+- "A production-style RAG service on free tiers, with API keys, guardrails and a semantic cache, verified in CI against managed Postgres and the real provider."
+- "Retrieval puts 23 of 26 key facts in the top-10 context on the evaluation paper; end-to-end answers carry 10–16 of 26, and the gap is measured and explained."
+- "On 15 poisoned passages, no attack succeeded with guardrails on and 7 succeeded with them off."
+- "Under the M7 load matrix the service answered 102,937 requests with no 5xx and no OOM kill in a 512 MB container (fake provider)."
+- "On the provider's free plan, the token limits bound the service to about 80 answered queries a day at the measured prompt size."
+
+## Forbidden claims
+
+<!-- claims-check-ignore-start -->
+- "production-grade", "enterprise-grade", "state-of-the-art", and unqualified "secure" or "safe" — enforced by `scripts/check_claims.py` over the README and docs.
+<!-- claims-check-ignore-end -->
+- Any accuracy claim for multi-agent answering in this service (not implemented; the capacity model's multi-agent rows are derived from Project 6 and labelled as such).
+- Any retrieval or answer-quality claim about documents other than the one evaluated paper.
+- "Deployed" without a green release-verification run linked in the same file; there is no persistent public instance.
+
+Numbers that must not be used without their conditions:
+
+- **23 / 26** — retrieval-level (facts present in the top-10 context), one paper, threshold changed post-hoc from 24 (dagger everywhere it appears).
+- **0 / 15** — 15 poisoned passages, guardrails on, and the model itself resisted; the deterministic filters were not the mechanism.
+- **121 rps** — fake provider, unconstrained local container; the render-like profile at concurrency 10 is 4.7 rps.
+- **80 answered queries/day** — the provider free plan's token cap at the measured prompt size, not a service limit.
+- **92.3%** — Project 6's tuned retrieval recall; this service's retrieval point is 23 / 26 (88.5%) and its answer-level figures are S1 above.

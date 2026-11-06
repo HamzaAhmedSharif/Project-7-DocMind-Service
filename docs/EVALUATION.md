@@ -15,12 +15,12 @@ and a dagger (†) on every table row that uses it. There is one such change so 
 | E1_mean | retrieval | Mean cosine similarity against the reference vectors | ≥ 0.999 | no | measured (M3) |
 | E2 | retrieval | Mean share of the reference top-10 chunks that the service also returns in its top-10, over all 20 questions | ≥ 0.90 | **yes** | measured (M3) |
 | E3 | retrieval | Key facts found in the retrieved context for the 12 document questions (26 facts total) | ≥ 23 / 26 † | **yes** | measured (M3) |
-| S1 | service_eval | Key facts found end-to-end through `POST /v1/query` | ≥ 22 / 26 | **yes** | M8 |
-| S2 | service_eval | Absent-topic questions answered with an abstention | ≥ 3 / 4 | **yes** | M8 |
-| S3a | service_eval | Citations that point at a chunk that exists | ≥ 0.95 | no | M8 |
-| S3b | service_eval | Answers that carry at least one citation | ≥ 0.90 | no | M8 |
-| S4 | service_eval | Citations whose chunk supports the quoted fact | ≥ 0.75 | no | M8 |
-| S5 | service_eval | Mean prompt tokens per query (cost ceiling) | ≤ 3200 | no | M8 |
+| S1 | service_eval | Key facts found end-to-end through `POST /v1/query` | ≥ 22 / 26 | **yes** | measured (M8): run A 10 / 26, run B 16 / 26 — gate not met |
+| S2 | service_eval | Absent-topic questions answered with an abstention | ≥ 3 / 4 | **yes** | measured (M8): 4 / 4 in both runs |
+| S3a | service_eval | Citations that point at a chunk that exists | ≥ 0.95 | no | measured (M8): 1.000 in both runs |
+| S3b | service_eval | Answers that carry at least one citation | ≥ 0.90 | no | measured (M8): run A 0.875, run B 1.000 |
+| S4 | service_eval | Citations whose chunk supports the quoted fact | ≥ 0.75 | no | measured (M8): run A 0.667, run B 0.875 |
+| S5 | service_eval | Mean prompt tokens per query (cost ceiling) | ≤ 3200 | no | measured (M8): run A 2002, run B 2351 |
 | R1 | redteam | Attacks that succeed with guardrails on | ≤ 2 / 15 | no | M6 |
 | C1 | cache | Wrong answers served from the semantic cache | ≤ 0.05 | **yes** | M6 |
 | L1 | load | 5xx responses and OOM kills under the load test | == 0 | **yes** | M7 |
@@ -111,3 +111,107 @@ What this baseline does not prove:
 - long-running stability — the run is minutes, not days;
 - behavior under real user traffic — the checks are sequential, not a load test.
 
+## Service-level evaluation (M8)
+
+Method. `evaluation/run_service_eval.py` runs the shipped image
+(`docmind-service:m8`, 512 MB limit) against a fresh local database, creates
+a throwaway API key, uploads the evaluation paper through the real API
+(49 chunks), and asks the 16 evaluation questions (d01–d12, a01–a04; the
+web questions w01–w04 are out of scope) through `POST /v1/query` with the
+semantic cache disabled. Runs A and B use the shipped configuration
+(evidence threshold 0.35, citations required, guardrails on). Run C is the
+ablation: the same run with `DOCMIND_GUARDRAILS_ENABLED=false`, which
+restores the M3-era prompt and removes the evidence gate and the validators.
+An answer counts as an abstention when the service refuses it or the text
+matches the Project 6 abstention patterns (`evaluation/scoring.py`,
+unimproved); the rule and its 20 pinned examples are recorded in
+`DECISIONS.md` and `tests/test_abstention.py`.
+
+Incident. Run A crossed a cluster of transient provider failures: five
+questions (d08, d10, d11, d12, a03) returned HTTP 503 with zero provider
+calls spent. Following the failure rule, only those five were re-run
+(5 further requests): four resolved, and d08 returned 503 again on a second
+and a third attempt while neighbouring questions succeeded. Run A below is
+the merged record (original + repair); d08 stands as a provider-availability
+casualty, with its facts answered 2/2 by run B. The variance rule requires
+stating any A–B difference beyond 2 facts: the original runs differ by 9 S1
+facts, the repaired A and B by 6 — provider nondeterminism across identical
+requests is larger than the 2-fact band, and the 503 cluster explains part
+of run A's original gap.
+
+| Gate | Threshold | Run A | Run B | Run C (ablation) |
+|---|---|---|---|---|
+| S1 key facts | ≥ 22 / 26 | 10 / 26 | 16 / 26 | see below |
+| S2 abstentions | ≥ 3 / 4 | 4 / 4 | 4 / 4 | see below |
+| S3a valid citations | ≥ 0.95 | 1.000 | 1.000 | n/a — no citation requirement in the ablated configuration |
+| S3b answers with citation | ≥ 0.90 | 0.875 | 1.000 | n/a |
+| S4 citation supports fact | ≥ 0.75 target | 0.667 | 0.875 | n/a |
+| S5 mean prompt tokens | ≤ 3200 | 2002 | 2351 | see below |
+
+S1 fails its pre-registered gate in both guardrails-on runs. The threshold
+was not re-registered; the failure and its measured causes are the result.
+
+Why S1 falls short — the decomposition, measured offline against the eval
+database (no provider calls). Run B loses 10 facts: d03 −2, d07 −3, d09 −2,
+d11 −2, d12 −1.
+
+- **The evidence gate (5 facts).** For d07, all three fact-bearing chunks
+  score below the 0.35 evidence threshold (best 0.3367); for d09 both facts
+  sit in one chunk scoring 0.2209. Those facts were in the retrieved top-10
+  (they count toward E3) but never entered the prompt. The 0.35 threshold
+  was calibrated on answerable top-1 scores (minimum 0.3737); facts living
+  in lower-ranked chunks score lower and fall through the gate.
+- **The grounding validator (4 facts).** d03 and d11 were refused
+  `ungrounded` in both runs although their fact chunks were in the prompt
+  at 0.4521 and 0.6808. The validator is all-or-nothing: one unsupported
+  claim in a draft discards the whole answer after one retry. On a famous
+  paper the model drafts from memory as well as from context, which is the
+  likely trigger; the refused drafts are not returned by the API, so this
+  mechanism is inferred from the refusal reasons, not observed per claim.
+- **Partial answers (1 fact).** d12 answered with 1 of its 2 facts.
+
+Lowering the evaluation threshold to 0.30 would recover at most d07's
+3 facts; d09's chunk at 0.22 is out of reach of any threshold that still
+refuses the absent questions. The refinements this points to — fact-aware
+gating and per-claim grounding instead of all-or-nothing refusal — are
+Project 9 work, recorded in `DECISIONS.md`.
+
+### Project 6 vs Project 7 on the same questions
+
+| | P6 baseline (single) | P6 single call | P6 multi-agent | P7 run A | P7 run B |
+|---|---|---|---|---|---|
+| S1 key facts | 22 / 26 | 23 / 26 | 22 / 26 | 10 / 26 | 16 / 26 |
+| S2 abstentions | 4 / 4 | 4 / 4 | 4 / 4 | 4 / 4 | 4 / 4 |
+| S3 answers with citation | n/a — citations not requested | n/a | n/a | 0.875 | 1.000 |
+| Mean prompt tokens | 2549 | 2559 | 5856 | 2002 | 2351 |
+
+Why this comparison is not apples-to-apples:
+
+- P7 runs a new prompt that demands citations; P6's prompt did not.
+- P7's stack (pgvector retrieval, ONNX embeddings inside the service,
+  evidence gating, grounding validation) differs from P6's in-process
+  pipeline; the retrieval layer alone scores 23 / 26 (E3).
+- The web questions are excluded from P7's service evaluation.
+- The corpus is a famous paper: the evaluating model may know it from
+  memory in both projects, which inflates raw answering and, in P7,
+  also triggers grounding refusals.
+
+## Retrieval recall curve
+
+Definition, frozen: key-fact recall on d01–d12 is the share of the 26 key
+facts present in the top-10 retrieved context, under each project's own
+tuned settings.
+
+| Stage | Recall | Conditions |
+|---|---|---|
+| Project 6, initial | 16 / 26 = 61.5% | 800-word chunks, top-k 4 |
+| Project 6, tuned | 24 / 26 = 92.3% | 150-word chunks, 25-word overlap, top-10 |
+| Project 7 | 23 / 26 † = 88.5% | pgvector top-10, 150/25 chunks, ONNX MiniLM (the E3 measurement) |
+| Project 5 | to be measured | the common-set comparison runs in Project 9 |
+| Project 9 | to be measured | held-out set: `evaluation/heldout/manifest.json` |
+
+The Project 7 point sits one fact below Project 6's tuned point for the
+reason recorded with the E3 post-hoc change (a pypdf version difference
+moved one fact across a chunk boundary); the retrieval ranking itself is at
+parity (E2 = 1.000). Nothing in this curve is estimated: the two
+"to be measured" rows stay empty until Project 9 runs them.

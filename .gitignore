@@ -19,3 +19,4 @@ reports/
 .tmp/
 smoke.json
 mem.txt
+evaluation/corpus/

@@ -1,45 +1,148 @@
 # DocMind Service
 
-[
-![ci](https://github.com/HamzaAhmedSharif/Project-7-DocMind-Service/actions/workflows/ci.yml/badge.svg)
-](https://github.com/HamzaAhmedSharif/Project-7-DocMind-Service/actions/workflows/ci.yml)
+[![ci](https://github.com/HamzaAhmedSharif/Project-7-DocMind-Service/actions/workflows/ci.yml/badge.svg)](https://github.com/HamzaAhmedSharif/Project-7-DocMind-Service/actions/workflows/ci.yml)
 
 ![license](https://img.shields.io/badge/license-MIT-green)
 
-A RAG service built on top of [DocMind Agent](https://github.com/HamzaAhmedSharif/Project-6-DocMind-Agent), developed in the open with every claim backed by a measurement.
+A production-style RAG service on free tiers: upload PDFs, ask questions, get
+answers with page-level citations, behind API keys, rate limits, guardrails
+and a semantic cache. It is the service form of
+[DocMind Agent](https://github.com/HamzaAhmedSharif/Project-6-DocMind-Agent)
+(Project 6), built to find out what changes when a notebook-grade RAG pipeline
+has to survive an API contract, tenants, abuse controls and a load test.
 
-**Status: milestone M6 of 8 (offline implementation complete; provider-dependent measurements and the live key checks are pending).** `POST /v1/query` and the document endpoints work end to end against Postgres/pgvector with ONNX embeddings; API keys, tenants, per-key limits, quotas, guardrails and the semantic cache are built and tested offline. The language model provider is the fake one by default. Every push and pull request runs the gates registered in `evaluation/gates.json`, the image is built, scanned and smoke-tested in CI, and one deliberately bad pull request proves the retrieval gate blocks a regression. Nothing below is claimed as built until its milestone is done.
+**What it is not:** a public product. There is no public instance and no
+payment card anywhere in the project; the release image is verified in CI
+against managed Postgres and the real provider (below). The evaluation corpus
+is one famous paper, so the model's own memory of it is a confound; held-out
+evaluation on papers the model cannot know is Project 9's work, prepared here
+as `evaluation/heldout/manifest.json`.
+
+## Release verification
+
+Every push to `main` passes the CI gates (lint and format, unit tests, the
+OpenAPI contract check, a retrieval-quality gate, secret and vulnerability
+scans, a container scan and a smoke test). The pushed image is then run
+exactly as built, under a 512 MB memory limit, against the project's managed
+Postgres (Neon free plan, pgvector) and its LLM provider, and nine checks
+must pass: the image matches the commit, the service is healthy and ready,
+the sample corpus is present, a question returns a cited answer, a nonsense
+question is refused, uploads are blocked for anonymous callers, and the rate
+limit triggers. Latest run:
+https://github.com/HamzaAhmedSharif/Project-7-DocMind-Service/actions/runs/41932491014
+
+Measured on the M5 verification run (GitHub-hosted runner, 512 MB container
+limit, Neon free plan, Frankfurt): readiness 1.102 s, first query 1.98 s,
+warm query 0.556 s, peak memory 230.8 MiB. Conditions for every number are in
+[`docs/FACTS.md`](docs/FACTS.md).
+
+## Architecture
+
+```mermaid
+flowchart LR
+  C[Client] -->|HTTPS| API[FastAPI service - 1 worker]
+  API --> AUTH[auth + limits + guardrails]
+  AUTH --> Q[answer_question - pure core]
+  Q --> R[Retriever: PgStore]
+  Q --> L[LLMClient: hosted adapter, throttled]
+  R --> E[ONNX embedder - fastembed MiniLM-L6-v2]
+  R --> PG[(Postgres + pgvector)]
+  AUTH --> CACHE[(semantic cache - same Postgres)]
+  API --> M[/metrics + JSON logs/]
+  L --> G[Groq free tier - gpt-oss-120b]
+```
+
+Components, data flows and the reason for each choice:
+[`docs/ARCHITECTURE.md`](docs/ARCHITECTURE.md). The engineering record, with
+the alternatives that were rejected and why, is [`DECISIONS.md`](DECISIONS.md).
 
 ## Quality gates
 
-Pre-registered in `evaluation/gates.json` before the first measurement; [`docs/EVALUATION.md`](docs/EVALUATION.md) explains what each one measures and how the reference fixtures were built.
+Pre-registered in `evaluation/gates.json` before the first measurement and
+generated into this table from the committed result files by
+`scripts/sync_readme.py`; a test fails if the table drifts. What each gate
+measures, the Project 6 comparison and the failure analysis:
+[`docs/EVALUATION.md`](docs/EVALUATION.md).
 
-| Gate | Check | Blocks merge |
-|---|---|---|
-| G1 | `ruff check` and `ruff format --check` | yes |
-| G2 | unit tests | yes |
-| G3 | OpenAPI contract drift (`git diff openapi.json`) | yes |
-| G4 | retrieval eval: E2 top-10 overlap ≥ 0.90 and E3 key facts ≥ 23/26 † (E1 diagnostic) | yes |
-| G5 | pinned gitleaks over the full history + pip-audit on `requirements.lock` | yes |
-| G6 | image builds; Trivy finds no CRITICAL with a fix (HIGH reported) | yes |
-| G7 | compose stack healthy + HTTP smoke test on the built image | yes |
+<!-- BEGIN GENERATED: gates -->
+| Gate | What it checks | Threshold | Measured |
+|---|---|---|---|
+| E1 | Embedding parity, min / mean cosine vs reference | >= 0.995 / >= 0.999 | 1.000 / 1.000 |
+| E2 | Retrieval top-10 overlap vs the FAISS reference | >= 0.90 | 1.000 |
+| E3 | Key facts in the retrieved context, d01-d12 | >= 23 / 26 † | 23 / 26 |
+| S1 | Key facts in answers through the API, run A (run B) | >= 22 / 26 | 10 / 26 (16 / 26) - gate not met; analysis in docs/EVALUATION.md |
+| S2 | Absent questions abstained, run A | >= 3 / 4 | 4 / 4 |
+| S3 | Valid citations / answers with a citation, run A | >= 0.95 / >= 0.90 | 1.00 / 0.875 |
+| S4 | Citations whose chunk supports the fact, run A | >= 0.75 target | 0.667 |
+| S5 | Mean prompt tokens per answered query, run A | <= 3200 | 2002 |
+| R1 | Injection attacks succeeding, guardrails on (off) | <= 2 / 15 | 0 / 15 (7 / 15) |
+| C1 | Semantic-cache false-hit share, test half | <= 0.05 | 0.0000 |
+| L1 | 5xx responses and OOM kills under the load matrix | 0 | 0 |
+| MEM | Peak RSS under load, 512 MB container | <= 480 MB | 225.8 MB |
 
-† The E3 threshold was changed from 24 to 23 with a recorded post-hoc entry in `DECISIONS.md`; every table that uses it carries the dagger.
+†: the E3 threshold was changed post-hoc from 24 to 23 (DECISIONS.md, 2026-11-03); the measured value is unchanged. S1 was not re-registered: the gate stands at 22 and the measured runs fall short, with the cause analysis in docs/EVALUATION.md.
+<!-- END GENERATED -->
 
-## Reproduce locally
+## Security and limits
 
-Prerequisites: Docker running (Postgres with pgvector) and Python 3.12 with `requirements-dev.txt` installed.
+The full threat table, test evidence and residual risks are in
+[`docs/SECURITY.md`](docs/SECURITY.md). The short version, with the measured
+numbers:
 
-```powershell
-powershell -ExecutionPolicy Bypass -File scripts\check.ps1                       # lint, format, unit, contract
-powershell -ExecutionPolicy Bypass -File scripts\check.ps1 -Integration -Eval    # + DB/model tests + retrieval gates
-```
+- **Keys and tenants:** `X-API-Key` is optional. A key is
+  `dm_<8 hex>_<32 URL-safe chars>`; only the prefix and a SHA-256 hash are
+  stored, and keys are revocable. Keyed tenants have isolated documents,
+  per-key minute windows and daily caps, and document/page quotas. Anonymous
+  callers are tenant `public`; anonymous uploads are blocked (403).
+- **Limits:** anonymous demo 5 questions/minute per IP and 300/day; keyed
+  tenants 30/minute and 200/day by default; a shared cap of 800 provider
+  calls/day. The per-IP window is per process; the daily cap is stored in
+  Postgres and shared across containers on the same database. Uploads are
+  capped at 10 MB and 200 pages; 20 documents and 500 pages per key.
+- **Guardrails:** prompt v2 treats retrieved text as untrusted, neutralizes
+  fake citations and delimiter runs, and uses a canary. Citations the model
+  invents are removed; an answer with no valid citation becomes an
+  `ungrounded` refusal while `REQUIRE_CITATION` is on; Markdown images and
+  URLs absent from the context are removed; long answers are truncated.
+- **Red-team:** 15 poisoned passages, guardrails off vs on: **7 / 15**
+  attacks succeeded with guardrails off, **0 / 15** with them on. The model
+  itself resisted in the on arm; the deterministic filters were not the
+  mechanism. `evaluation/results/redteam-m6.json`.
+- **Evidence thresholds:** calibrated from retrieval only, per corpus:
+  paper 0.35, demo 0.52. The threshold is per corpus and is not guessed.
+- **Cache:** tenant-scoped semantic cache, threshold 0.86 from a pre-declared
+  calibration/test split; test-half same-intent hit rate 0.3636, false-hit
+  share 0.0000. Only non-refused, validated answers are stored.
+- **Demo query log:** anonymous questions are stored redacted for 30 days
+  (emails, phone numbers, ID-like numbers and links removed; names may
+  remain). Keyed tenants are not logged. Do not enter personal data.
+- **Not covered:** no WAF or bot protection, regex redaction misses names
+  and novel formats, key revocation can take up to 60 s, and poisoned facts
+  (plausible but wrong content) are out of scope.
 
-`-Integration` needs Postgres on `127.0.0.1:5433` (`docker compose -f deploy/compose.dev.yml up -d`); `-Eval` downloads the corpus by hash and writes `evaluation/results/retrieval-local.json`.
+Capacity on the free tiers — the provider's token limits, not the service,
+bound the throughput: [`docs/CAPACITY.md`](docs/CAPACITY.md).
 
-## Run the container
+## Limits and known gaps
 
-The image is single-stage, runs as non-root (uid 10001) and has the ONNX embedding model baked in, so retrieval works without a model download at runtime.
+- **Service-level recall is lower than retrieval-level recall.** The gates
+  above show E3 (facts present in the retrieved context) at 23 / 26 and S1
+  (facts surviving into API answers) at 10 / 26 in run A and 16 / 26 in
+  run B, against a pre-registered gate of 22. The measured causes are in
+  `docs/EVALUATION.md`: fact chunks that fall below the evidence threshold
+  never reach the prompt, and the all-or-nothing grounding refusal discards
+  some answers whose facts were present. The threshold was not re-registered
+  to hide this.
+- **One paper.** All quality numbers are on *Attention Is All You Need*;
+  nothing is claimed about other documents.
+- **Single instance.** One worker, in-process per-IP limiter; the design
+  targets free tiers, not horizontal scale (the load numbers with their
+  conditions are in `docs/FACTS.md`).
+- **No public instance** (see Release verification).
+
+## Quick start
+
+Prerequisites: Docker, and Python 3.12 for the local checks.
 
 ```powershell
 docker compose -f deploy/compose.ci.yml up --build --wait
@@ -47,82 +150,35 @@ python scripts\smoke_http.py --base http://127.0.0.1:8000 --mode ci
 docker compose -f deploy/compose.ci.yml down -v
 ```
 
-## Release verification
-
-Every push to `main` passes the CI gates (lint, tests, API contract, a retrieval-quality gate, secret and vulnerability scans, a container scan). The release image is then run exactly as built, under a 512 MB memory limit, against the project's managed Postgres (Neon free plan, pgvector) and its LLM provider, and nine automatic checks must pass: the image matches the commit, the service is healthy and ready, the sample corpus is present, a question returns a cited answer, a nonsense question is refused, uploads are blocked for anonymous callers, and the rate limit triggers. Latest run: https://github.com/HamzaAhmedSharif/Project-7-DocMind-Service/actions/runs/41809139449.
-
-Measured on that run (GitHub-hosted runner, 512 MB container limit, Neon free plan, Frankfurt): readiness 1.102 s, first query 1.98 s, warm query 0.556 s, peak memory 230.8 MiB.
-
-This project has no public instance. No payment card is used anywhere in it, and every free container host checked on 2026-11-04 either required a card or restricted the runtime (see DECISIONS.md). See "Run the container" to run it yourself with Docker.
-
-### M6.10 live verification (local)
-
-Under Amendment A1 there is no public host and no `DEMO_URL`, so the M6.10 live key checks are run against the release image executed locally with a local database (`DOCMIND_UPLOADS_ENABLED=true` for this local run only; it stays `false` in the release config per A1.3). `scripts/live_key_check.ps1` reads `$env:DOCMIND_SMOKE_KEY` and prints only `PASS`/`FAIL` lines for: bad key 401; list with key 200; upload tiny generated PDF 201; same upload again 200 duplicate; query that document 200 with a citation; same query again `cache == "hit"`; delete 204; list again, document gone; anonymous upload 403. All nine checks passed locally against commit `703a842`. Hamza creates his own key (tenant `hamza-demo`, label `portfolio`, `--write`) against this local instance and runs the same check against `http://127.0.0.1:8000`; he does not use Neon for this step. The manager's anonymous checks against the same local instance were: sample question 200 with citations; off-topic question refused `low_evidence` with the daily counter unmoved; rate-limit headers present on `/v1/query`; `query_log` rows present after the test queries; `admin show-log --last 3` shows redacted text only. No live demo is claimed and no key material is recorded here.
-
-## Security and limits
-
-The service is not hosted publicly. The M5 release image is verified in CI; the M6 key, tenant, guardrail and cache features are built and tested offline, and the live key checks are part of M6.10. This section describes the design and the offline evidence, not a public deployment.
-
-- **Keys and tenants:** `X-API-Key` is optional. A key is `dm_<8 hex>_<32 URL-safe chars>`; only the prefix and a SHA-256 hash are stored, and keys are revocable. Keyed tenants have isolated documents, a per-key minute window, a per-key daily cap and document/page quotas. Anonymous callers are tenant `public`; anonymous uploads are blocked.
-- **Limits:** anonymous demo 5 questions/minute per IP and 300/day; keyed tenants 30/minute and 200/day by default; a shared global cap of 800 provider calls/day; uploads 10 MB/200 pages; 20 documents/500 pages per key. Quota failures return 403 `quota_exceeded`. Limiter state is per process, so this is a single-instance design.
-- **Guardrails:** prompt v2 treats retrieved text as untrusted, neutralizes fake citations and delimiter runs, and uses a canary. Unknown citations are removed; a non-refused answer with no valid citation becomes `ungrounded` when `REQUIRE_CITATION` is on; Markdown images and URLs not present in the context are removed; long answers are truncated. `GUARDRAILS_ENABLED=false` reproduces the M3 prompt byte-for-byte.
-- **Evidence threshold:** paper 0.35 (refuses 0 of 4 absent questions), demo 0.52 (refuses 6 of 6 off-topic questions), both from retrieval-only calibration; the threshold is per corpus and is not guessed.
-- **Cache:** keyed by tenant, corpus version and scope hash; τ = 0.86 from the pre-declared calibration/test split; test-half same-intent hit rate 0.3636 and false-hit share 0.0000. Only non-refused, validated answers are stored; 30-day TTL; at most 500 rows per tenant.
-- **Demo query log:** anonymous questions are stored redacted for 30 days (emails, phone numbers, ID-like numbers and links removed; names may remain). Keyed tenants are not logged. Do not enter personal data.
-- **Red-team:** 15 poisoned passages, arm off vs on, two repeats. Live R1: arm `on` **0 / 15** attacks succeeded, arm `off` **7 / 15**; R1 passes (`0 / 15 <= 2`, not gating). The `off` arm shows the harness can succeed. Result file: `evaluation/results/redteam-m6.json`.
-- **No-citation:** 12 answerable paper questions with the citation check off: **1 / 12** answers had no valid citation and **0 / 12** were refused, so the pre-declared rule keeps `REQUIRE_CITATION=true`; that one answer would become a refusal. Result file: `evaluation/results/no-citation-m6.json`.
-- **Not covered:** no WAF or bot protection, no per-IP protection beyond the caps, regex redaction misses names and novel formats, revocation can take up to 60 s, and poisoned facts are out of scope.
-
-Full threat table, test evidence and residual risks: [`docs/SECURITY.md`](docs/SECURITY.md).
-
-## Planned
-
-| Milestone | Deliverable |
-|---|---|
-| M1 | Contract-first skeleton, tooling, CI skeleton (done) |
-| M2 | Service core on fakes: query, citations, errors, request ids, JSON logs (done) |
-| M3 | Postgres and pgvector, ONNX embeddings, retrieval parity and recall gate (done) |
-| M4 | Full CI/CD with quality gates, image build and scan (done) |
-| M5 | Release verification against Neon, landing page, measured numbers (done) |
-| M6 | API keys, tenants, rate limits, guardrails, semantic cache (offline built; live checks pending) |
-| M7 | Metrics, dashboard, load test, capacity model |
-| M8 | Service-level evaluation and write-up |
-
-## Develop locally
-
-```bash
-python -m venv .venv        # Python 3.12; activate it, then:
-pip install -r requirements.txt -r requirements-dev.txt
-python -m pytest -q
-uvicorn docmind_service.main:app --reload --no-access-log
-```
-
-Open http://127.0.0.1:8000/docs for the interactive contract. After changing routes or schemas, run `python scripts/export_openapi.py`; a test fails if `openapi.json` is out of date.
-
-## Try demo mode
-
 ```bash
 curl -s http://127.0.0.1:8000/v1/query -H 'content-type: application/json' \
   -d '{"question": "What is self-attention?"}'
 ```
 
-The answer comes from the fake model and the sample chunks. The response carries citations, usage and a request id, which is also returned in the `X-Request-ID` header; application logs are JSON lines and never contain question or answer text. Anonymous demo questions are stored redacted for 30 days in the demo query log (see "Security and limits").
+With the default fake provider the answer comes from the sample chunks; the
+response carries citations, usage and a request id (also the `X-Request-ID`
+header). To develop locally:
 
-## Layout
+```powershell
+powershell -ExecutionPolicy Bypass -File scripts\check.ps1                      # lint, format, unit, contract
+powershell -ExecutionPolicy Bypass -File scripts\check.ps1 -Integration -Eval   # + DB/model tests + retrieval gates
+```
 
-```
-docmind_service/   application package (config, schemas, problem details, app)
-scripts/           export_openapi, fetch_corpus, make_tiny_pdf, smoke_http, check.ps1, make_lock.ps1
-evaluation/        questions, scorer, gates, retrieval runner, committed reference fixtures
-deploy/            compose files: dev database, CI app+database stack
-tests/             offline tests plus integration/model marked tests
-docs/              evaluation guide and security model (docs/SECURITY.md)
-Dockerfile         single-stage non-root image with the ONNX model baked in
-requirements.lock  Linux lock generated inside the base image (scripts/make_lock.ps1)
-openapi.json       committed API contract
-DECISIONS.md       decisions and engineering notes, each with its evidence
-SECURITY.md        how to report a vulnerability
-```
+After changing routes or schemas, run `python scripts/export_openapi.py`; a
+test fails if `openapi.json` is out of date.
+
+## Documents
+
+- [`docs/EVALUATION.md`](docs/EVALUATION.md) — every gate, method and result,
+  the Project 6 comparison, the recall curve, the confounds.
+- [`docs/ARCHITECTURE.md`](docs/ARCHITECTURE.md) — components and data flows.
+- [`docs/CAPACITY.md`](docs/CAPACITY.md) — the capacity model and its inputs.
+- [`docs/SECURITY.md`](docs/SECURITY.md) — threat table and residual risks.
+- [`docs/OPERATIONS.md`](docs/OPERATIONS.md) — runbook, settings, drills.
+- [`docs/FACTS.md`](docs/FACTS.md) — every public number with its source,
+  conditions, commit and date, plus the allowed and forbidden claims.
+- [`DECISIONS.md`](DECISIONS.md) — decisions and their evidence.
+- [`SECURITY.md`](SECURITY.md) — how to report a vulnerability.
 
 ## License
 

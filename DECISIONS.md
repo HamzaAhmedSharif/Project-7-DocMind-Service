@@ -423,3 +423,79 @@ Notes are recorded in the milestone sections below.
 - Rejected: a "small" live load run (there is no small version of a 60-second concurrency-10 test against a 5/min limiter).
 - Tradeoff accepted: live latency under load stays unmeasured; the capacity model (M8) is built from the local matrix and says so.
 - Would revisit if: a paid or self-hosted instance exists.
+
+## M8 - service-level evaluation and close-out (2026-11-06)
+
+### The S2 abstention rule
+
+- Context: S2 (absent questions abstained, gate at least 3 of 4) never had
+  its counting rule written down; a non-refused answer could still be an
+  abstention in words.
+- Chosen: an answer counts as an abstention when the service refuses it OR
+  its text matches `evaluation/scoring.py`'s `is_abstention` (the Project 6
+  scorer, unimproved). The rule is pinned by 20 examples in
+  `tests/test_abstention.py` (10 abstaining, 10 answering) before the first
+  service-eval run.
+- Note: in runs A and B all four absent questions were refused outright, so
+  this measurement is 4/4 under either half of the rule; the text half
+  exists for runs where the model answers in abstention words.
+- Would revisit if: the provider or prompt changes the refusal behaviour.
+
+### Live verification under Amendment A1
+
+- Context: sections 10.7 and 10.8 were written against a persistent live
+  host; Amendment A1 (M5) replaced that with release verification after
+  every free host checked required a card or restricted the runtime.
+- Chosen: the M8 live steps map to the `release-smoke` workflow (G8-C: the
+  pushed image against production Neon and the real provider, nine checks)
+  on the final head, plus the manager checkpoint re-runs against the local
+  image. The mapping is the same one M5 and M7 closed under.
+- Rejected: re-opening the host search for the final milestone.
+
+### Run A repair and the d08 casualty
+
+- Context: run A crossed a cluster of transient provider failures; five
+  questions returned HTTP 503 with zero provider calls spent.
+- Chosen: the failure rule — re-run only the affected questions against the
+  standing eval database (chunk ids stay stable), merge, recompute, and
+  record the repair in the results file. Four of five resolved for
+  5 requests. d08 returned 503 on two further attempts across about
+  40 minutes while neighbouring questions succeeded; it is recorded as a
+  provider-availability casualty and no fourth attempt was made (run B
+  answers d08 2/2). The A-B variance this leaves is stated in
+  `docs/EVALUATION.md`, as the variance rule requires.
+
+### S1 fails its gate; the threshold is not re-registered
+
+- Context: S1 (key facts in answers through the API, gate 22/26) measured
+  10/26 in run A and 16/26 in run B. Retrieval alone holds 23/26 (E3), so
+  the gap is created inside the service stack, and it is decomposed in
+  `docs/EVALUATION.md`: the evidence gate drops 5 facts whose chunks score
+  below the threshold calibrated on top-1 scores; the all-or-nothing
+  grounding validator refuses 4 facts that were in the prompt; 1 fact is a
+  partial answer.
+- Chosen: record S1 as a failed gate with the full analysis and close M8
+  PASS-WITH-NOTES. The manager recommended this over a post-hoc threshold
+  change, and Hamza accepted the recommendation on 2026-11-06 ("do it what
+  you think is right").
+- Rejected: re-registering S1 post-hoc (the measured causes are design
+  properties, not a scoring accident; a lower bar would hide them), and
+  lowering the evaluation evidence threshold (recovers at most 3 of the
+  missing facts; d09's chunk at 0.2209 stays unreachable).
+- Tradeoff accepted: the headline service-level number stays well below
+  the retrieval number, in public, with the explanation next to it.
+- Would revisit if: Project 9 implements fact-aware evidence gating or
+  per-claim grounding; the held-out set for that comparison is prepared
+  (`evaluation/heldout/manifest.json`).
+
+### Capacity inputs: the published provider table
+
+- Context: the capacity model needs RPM and TPD; the response headers
+  carry only the token-per-minute and requests-per-day limits.
+- Chosen: RPM 30 and TPD 200,000 from the provider's published free-plan
+  table for `openai/gpt-oss-120b`, retrieved 2026-11-06; the table agrees
+  with the live headers on TPM (8,000) and RPD (1,000). All four values
+  and their sources are recorded in `evaluation/results/capacity-m8.json`.
+- Consequence: at the measured 2,498.9 tokens per answered query, the
+  daily token cap — not the 800-request planning cap — is the binding
+  daily constraint (80.0 answered queries/day).
