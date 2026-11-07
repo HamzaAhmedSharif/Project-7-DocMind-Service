@@ -54,7 +54,14 @@ Every public number with its source and conditions. A number quoted without its 
 | Capacity: provider-bound throughput | 2.88 queries/minute; 80.0 answered queries/day | Groq free plan (TPM 8,000, TPD 200,000) at the measured 2,498.9 tokens per answered query; min(RPD 1000, global cap 800, TPD / tokens) | `evaluation/results/capacity-m8.json` | 9f042e4 | 2026-11-06 |
 | Capacity: served per day scenarios | 80.0 (cache 0) / 125.8 (cache 0.3636) / 160.1 (cache 0.5) | the 0.3636 rate is the M6 probe-set measurement, labelled a scenario, not traffic | `evaluation/results/capacity-m8.json` | 9f042e4 | 2026-11-06 |
 | Held-out manifest | 24 papers: 8 each cs.CL, cs.IR, cs.LG, submitted from 2026-01-01 in submission order, 6–25 pages, ≥ 500 extractable chars/page | selection procedure fixed in advance, no cherry-picking; PDFs kept out of git; model documented knowledge cutoff 2024-06 | `evaluation/heldout/manifest.json` | 9f042e4 | 2026-11-06 |
-| M8 provider requests, 2026-11-06 | 45 | check_llm 1, run A 11, run A repairs 5, d08 retry 0, run B 28; milestone cap 100, day cap 60 | `reports/provider-ledger.csv` | 0694bc4 | 2026-11-06 |
+| M8 provider requests, 2026-11-06 | 45 at commit time; the day closed at 83 — see the budget incident row below | check_llm 1, run A 11, run A repairs 5, d08 retry 0, run B 28; milestone cap 100, day cap 60 | `reports/provider-ledger.csv` | 0694bc4 | 2026-11-06 |
+
+| S1 run C (ablation) | 19 / 26 — a lower bound: d10 and d11 (4 facts) returned provider 503 on all three attempts | guardrails off (`DOCMIND_GUARDRAILS_ENABLED=false`), same stack, model and questions | `evaluation/results/service-eval-m8.json` | b1dea68 | 2026-11-07 |
+| S2 run C | 2 / 4 recorded; a02 and a03 unmeasurable (503 on every attempt) and count as non-abstentions; both measured absent questions (a01, a04) abstained | ablation configuration | `evaluation/results/service-eval-m8.json` | b1dea68 | 2026-11-07 |
+| S3b / S4 / S5 run C | 0.625 / 0.700 / 1741 mean prompt tokens | citations not required in the ablated configuration | `evaluation/results/service-eval-m8.json` | b1dea68 | 2026-11-07 |
+| Manager checkpoint re-runs | d01 reproduced 2 / 2 facts and a01 reproduced its abstention through the local image, matching run A | run A configuration; 2 provider requests | `reports/provider-ledger.csv` | b1dea68 | 2026-11-07 |
+| Budget incident | a leftover one-shot scheduled task re-executed runs A and B overnight (2026-11-06 23:59): +38 requests; the day-cap accounting and the recovery are recorded in `DECISIONS.md` | duplicate measurements discarded; canonical A / B restored from the committed results file | `reports/provider-ledger.csv` | b1dea68 | 2026-11-07 |
+| M8 provider requests, total | 97 by the ledger — 2026-11-06: 83 including the 38 duplicate-run requests; 2026-11-07: 14 (run C 4, C repairs 5 + 3, checkpoint 2). Release-verification runs spend 1 request each and are reported with the release track, as at M7 | caps: 100 for the milestone (met), 60 per day (exceeded on 2026-11-06 — see the incident row) | `reports/provider-ledger.csv` | b1dea68 | 2026-11-07 |
 
 ## Allowed claims
 

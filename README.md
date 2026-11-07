@@ -146,9 +146,16 @@ Prerequisites: Docker, and Python 3.12 for the local checks.
 
 ```powershell
 docker compose -f deploy/compose.ci.yml up --build --wait
-python scripts\smoke_http.py --base http://127.0.0.1:8000 --mode ci
+$lines = docker compose -f deploy/compose.ci.yml exec -T app python -m docmind_service.admin create-key --tenant smoke-ci --label ci --write
+$env:DOCMIND_SMOKE_KEY = $lines[[array]::IndexOf($lines, '-----BEGIN DOCMIND KEY-----') + 1]
+python scripts\smoke_http.py --base http://127.0.0.1:8000 --mode ci --api-key-env DOCMIND_SMOKE_KEY
 docker compose -f deploy/compose.ci.yml down -v
 ```
+
+The smoke script exercises the write path, which requires an API key with
+the write scope under the authentication rules in `docs/ARCHITECTURE.md`;
+the middle lines create a throwaway key in the local stack for that
+purpose, the same thing CI does.
 
 ```bash
 curl -s http://127.0.0.1:8000/v1/query -H 'content-type: application/json' \

@@ -499,3 +499,45 @@ Notes are recorded in the milestone sections below.
 - Consequence: at the measured 2,498.9 tokens per answered query, the
   daily token cap — not the 800-request planning cap — is the binding
   daily constraint (80.0 answered queries/day).
+
+### Run C repairs; d10 and d11 stand as casualties
+
+- Context: run C crossed provider 503 clusters in the original run and in
+  both repairs, the same failure mode as run A.
+- Chosen: two repairs under the failure rule (the 12 affected questions,
+  then the 5 remaining document questions). After three attempts each,
+  d10, d11, a02 and a03 remained unmeasured; run C is reported with S1 as
+  a lower bound and the unmeasured questions named.
+- Consequence: the ablation still prices the guardrail stack (at least
+  19 against 16 and 10) but cannot price d11's validator refusal, and its
+  S2 rests on the two absent questions that could be measured.
+
+### Budget incident: duplicate execution of runs A and B
+
+- Context: the one-shot scheduled task that executed runs A and B kept a
+  live 23:59 trigger and fired again overnight on 2026-11-06,
+  re-executing both runs (+38 provider requests) and overwriting the
+  working results file and the raw-answers file.
+- Measured consequence: the 2026-11-06 ledger total is 83 against the
+  milestone day cap of 60 — the day cap was exceeded. The milestone
+  total is 97 against the cap of 100 — met. The duplicate measured run A
+  at 4 / 26 (503-contaminated) and run B at 19 / 26.
+- Chosen: the canonical runs stand (A repaired 10 / 26, B 16 / 26, as
+  committed); the duplicate measurements are discarded, including the
+  higher B — an accidental re-measurement is not a basis for replacing a
+  recorded run. The working results file was restored from the committed
+  version and run C merged into the restored file. The raw answers for
+  runs A and B were overwritten by the duplicate and are lost; no
+  remaining step needs them.
+- Rule adopted: one-shot scheduled tasks are deleted immediately after
+  their run completes; a leftover trigger is treated as a pending
+  execution.
+
+### README quick start: create the smoke key first
+
+- Context: under the M6 authentication ruling (writes are key-only), the
+  documented quick start's anonymous smoke run fails its write-path
+  checks; CI passes because it creates a throwaway write key first.
+- Chosen: the README quick start mirrors CI — create a throwaway key in
+  the local stack and pass it to the smoke script through an environment
+  variable. Verified end-to-end by the clean-clone rehearsal.

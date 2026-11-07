@@ -139,14 +139,23 @@ facts, the repaired A and B by 6 — provider nondeterminism across identical
 requests is larger than the 2-fact band, and the 503 cluster explains part
 of run A's original gap.
 
+Run C crossed the same failure mode twice over: twelve questions returned
+503 in the original run and five of them again in the first repair.
+Following the failure rule, the affected questions were re-run twice
+(5 + 3 further requests). d10 and d11 returned 503 on all three attempts
+each, and the absent questions a02 and a03 could not be measured either;
+they stand as provider-availability casualties. Run C's S1 is therefore a
+lower bound, and its recorded S2 of 2 / 4 counts a02 and a03 as
+non-abstentions although neither was ever successfully asked.
+
 | Gate | Threshold | Run A | Run B | Run C (ablation) |
 |---|---|---|---|---|
-| S1 key facts | ≥ 22 / 26 | 10 / 26 | 16 / 26 | see below |
-| S2 abstentions | ≥ 3 / 4 | 4 / 4 | 4 / 4 | see below |
-| S3a valid citations | ≥ 0.95 | 1.000 | 1.000 | n/a — no citation requirement in the ablated configuration |
-| S3b answers with citation | ≥ 0.90 | 0.875 | 1.000 | n/a |
-| S4 citation supports fact | ≥ 0.75 target | 0.667 | 0.875 | n/a |
-| S5 mean prompt tokens | ≤ 3200 | 2002 | 2351 | see below |
+| S1 key facts | ≥ 22 / 26 | 10 / 26 | 16 / 26 | 19 / 26 (lower bound) |
+| S2 abstentions | ≥ 3 / 4 | 4 / 4 | 4 / 4 | 2 / 4 (two unmeasurable) |
+| S3a valid citations | ≥ 0.95 | 1.000 | 1.000 | 1.000 |
+| S3b answers with citation | ≥ 0.90 | 0.875 | 1.000 | 0.625 |
+| S4 citation supports fact | ≥ 0.75 target | 0.667 | 0.875 | 0.700 |
+| S5 mean prompt tokens | ≤ 3200 | 2002 | 2351 | 1741 |
 
 S1 fails its pre-registered gate in both guardrails-on runs. The threshold
 was not re-registered; the failure and its measured causes are the result.
@@ -175,6 +184,22 @@ Lowering the evaluation threshold to 0.30 would recover at most d07's
 refuses the absent questions. The refinements this points to — fact-aware
 gating and per-claim grounding instead of all-or-nothing refusal — are
 Project 9 work, recorded in `DECISIONS.md`.
+
+What the ablation prices. Run C — the same retrieval and model with the
+guardrails off — scores at least 19 / 26 on S1 (a lower bound; d10 and
+d11 unmeasurable), above both guardrails-on runs (A 10, B 16). The
+validator refusal disappears where it can be measured (d03 scores 2 / 2
+in run C, refused in both guardrails-on runs), and the gate-funnel
+questions partly recover (d07 2 / 3 against 0 / 3 in run B; d09 1 / 2
+against 0 / 2). The guardrail stack's measured price on this set is at
+least 3 facts against the better guardrails-on run. What the price buys
+is the injection resistance measured at M6 (0 / 15 with guardrails on,
+7 / 15 off) and citation discipline: with no citation requirement, only
+0.625 of run C's answers carry a citation (S3b), against 1.000 in run B.
+Abstention did not degrade on the two absent questions that could be
+measured in run C — the model declines from an empty context in both
+configurations. Mean prompt tokens fall to 1741 in run C because the
+validator's retry loop never runs.
 
 ### Project 6 vs Project 7 on the same questions
 
