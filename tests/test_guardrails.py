@@ -195,10 +195,13 @@ def test_unknown_citations_are_removed_and_counted():
 
 
 def test_require_citation_turns_a_bare_answer_into_ungrounded():
+    # P7.1: a bare answer triggers the single citation-repair retry; the
+    # refusal stands only because the retry is also bare (two provider calls).
+    llm = ScriptedLLM(["a bare answer", "a bare answer"])
     result = answer_question(
         "Why?",
         retriever=SpyRetriever([chunk(1)]),
-        llm=ScriptedLLM(["a bare answer"]),
+        llm=llm,
         document_ids=None,
         top_k=5,
         guardrails_enabled=True,
@@ -208,7 +211,87 @@ def test_require_citation_turns_a_bare_answer_into_ungrounded():
     assert result.refused is True
     assert result.refusal_reason == "ungrounded"
     assert result.answer == UNGROUNDED_ANSWER
-    assert COUNTS["ungrounded"] == 1
+    assert len(llm.prompts) == 2
+    assert COUNTS["ungrounded"] == 2
+
+
+def test_evidence_gate_keeps_low_chunks_when_the_best_score_clears_it():
+    # M6.4 spec: the gate tests the best score only; every retrieved chunk
+    # goes into the prompt, including chunks below the threshold.
+    llm = ScriptedLLM(["answer [c2]."])
+    chunks = [
+        chunk(1, "alpha", score=0.9),
+        chunk(2, "beta", score=0.3),
+        chunk(3, "gamma", score=0.1),
+    ]
+    result = answer_question(
+        "Why?",
+        retriever=SpyRetriever(chunks),
+        llm=llm,
+        document_ids=None,
+        top_k=5,
+        guardrails_enabled=True,
+        evidence_min_score=0.35,
+        canary="CANARY-XYZZY",
+    )
+    assert result.refused is False
+    assert result.n_chunks == 3
+    assert "<<<c1" in llm.prompts[0]
+    assert "<<<c2" in llm.prompts[0]
+    assert "<<<c3" in llm.prompts[0]
+    assert [citation.chunk_id for citation in result.citations] == ["x:2"]
+
+
+def test_evidence_gate_refuses_when_the_best_score_is_below_it():
+    llm = ScriptedLLM([])
+    result = answer_question(
+        "Why?",
+        retriever=SpyRetriever([chunk(1, score=0.3), chunk(2, score=0.2)]),
+        llm=llm,
+        document_ids=None,
+        top_k=5,
+        guardrails_enabled=True,
+        evidence_min_score=0.35,
+        canary="CANARY-XYZZY",
+    )
+    assert result.refused is True
+    assert result.refusal_reason == "low_evidence"
+    assert llm.prompts == []
+
+
+def test_citation_repair_recovers_a_grounded_answer():
+    llm = ScriptedLLM(["a bare answer", "grounded answer [c1]."])
+    result = answer_question(
+        "Why?",
+        retriever=SpyRetriever([chunk(1)]),
+        llm=llm,
+        document_ids=None,
+        top_k=5,
+        guardrails_enabled=True,
+        canary="CANARY-XYZZY",
+        require_citation=True,
+    )
+    assert result.refused is False
+    assert result.answer == "grounded answer [c1]."
+    assert [citation.chunk_id for citation in result.citations] == ["x:1"]
+    assert len(llm.prompts) == 2
+    assert "did not cite" in llm.prompts[1]
+
+
+def test_citation_repair_never_fires_on_a_canary_block():
+    llm = ScriptedLLM(["the code is CANARY-123 [c1]."])
+    result = answer_question(
+        "Why?",
+        retriever=SpyRetriever([chunk(1)]),
+        llm=llm,
+        document_ids=None,
+        top_k=5,
+        guardrails_enabled=True,
+        canary="CANARY-123",
+    )
+    assert result.refused is True
+    assert result.refusal_reason == "output_blocked"
+    assert len(llm.prompts) == 1
 
 
 def test_require_citation_can_be_disabled():

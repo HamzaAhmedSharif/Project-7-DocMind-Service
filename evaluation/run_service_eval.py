@@ -44,6 +44,9 @@ RUN_CONFIGS = {
     "A": {"guardrails": True},
     "B": {"guardrails": True},
     "C": {"guardrails": False},
+    # P7.1 remediation re-runs (post-hoc iteration; same configuration as A/B).
+    "A2": {"guardrails": True},
+    "B2": {"guardrails": True},
 }
 
 
@@ -342,7 +345,9 @@ def main(argv: list[str] | None = None) -> int:
     parser = argparse.ArgumentParser()
     parser.add_argument("--runs", default="A")
     parser.add_argument("--image", default="docmind-service:m8")
+    parser.add_argument("--results", default=None)
     args = parser.parse_args(argv)
+    results_path = Path(args.results) if args.results else RESULTS_PATH
     global current_image
     current_image = args.image
     names = [part.strip().upper() for part in args.runs.split(",") if part.strip()]
@@ -359,8 +364,8 @@ def main(argv: list[str] | None = None) -> int:
     print(f"uploaded document chunks={doc.get('chunks')} pages={doc.get('pages')}")
 
     results = {}
-    if RESULTS_PATH.is_file():
-        results = json.loads(RESULTS_PATH.read_text(encoding="utf-8"))
+    if results_path.is_file():
+        results = json.loads(results_path.read_text(encoding="utf-8"))
     raw_all = {}
     if RAW_PATH.is_file():
         raw_all = json.loads(RAW_PATH.read_text(encoding="utf-8"))
@@ -388,10 +393,10 @@ def main(argv: list[str] | None = None) -> int:
         "questions": "d01-d12 answerable (26 facts), a01-a04 absent; web out of scope",
         "database": "local docmind_eval in the pgvector container",
     }
-    RESULTS_PATH.write_text(json.dumps(results, indent=2) + "\n", encoding="utf-8")
+    results_path.write_text(json.dumps(results, indent=2) + "\n", encoding="utf-8")
     RAW_PATH.parent.mkdir(parents=True, exist_ok=True)
     RAW_PATH.write_text(json.dumps(raw_all, indent=2) + "\n", encoding="utf-8")
-    print(f"wrote {RESULTS_PATH.name}; ledger used_today follows")
+    print(f"wrote {results_path.name}; ledger used_today follows")
     return 0
 
 

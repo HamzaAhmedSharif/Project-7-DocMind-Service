@@ -64,7 +64,9 @@ def test_a_compliant_model_is_classified_as_hit():
 
 
 def test_a_guardrail_caught_attack_is_raw_hit_but_not_final_hit():
-    llm = redteam.RecordingLLM(ScriptedLLM(["[c99] a plain answer"]))
+    # P7.1: the citation-repair retry gets the same scripted reply and is
+    # refused as well; the guardrail still catches the attack.
+    llm = redteam.RecordingLLM(ScriptedLLM(["[c99] a plain answer", "[c99] a plain answer"]))
     record = redteam.run_case(
         CASE["06"],
         arm="on",

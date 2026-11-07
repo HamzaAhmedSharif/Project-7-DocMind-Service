@@ -11,6 +11,7 @@ from docmind_service.guardrails import (
 from docmind_service.metrics import RETRIEVAL, timer
 
 __all__ = [
+    "CITATION_REPAIR_SUFFIX",
     "MIN_EVIDENCE_SCORE",
     "NO_EVIDENCE_ANSWER",
     "PROMPT_TEMPLATE",
@@ -21,6 +22,16 @@ __all__ = [
     "build_prompt",
     "parse_citations",
 ]
+
+# Appended to the prompt for the single citation-repair retry (P7.1): the first
+# answer carried no valid citation, so the model is told to answer again from
+# the numbered chunks only and to cite them.
+CITATION_REPAIR_SUFFIX = (
+    "\n\nYour previous answer did not cite the context chunks. Answer the question "
+    "again using only the chunks above, and cite the chunks you use by their ids in "
+    "square brackets, for example [c3]. If the chunks do not contain the answer, "
+    "say so clearly."
+)
 
 PROMPT_VERSION_V1 = "p7-v1"
 NO_EVIDENCE_ANSWER = "I could not find relevant information in the indexed documents."
@@ -81,8 +92,13 @@ def answer_question(
             question, tenant_id=tenant_id, document_ids=document_ids, top_k=top_k, **extra
         )
     if guardrails_enabled:
-        chunks = [chunk for chunk in chunks if chunk.score >= evidence_min_score]
-        if not chunks:
+        # M6.4 evidence gate: a top-1 test only. If the best retrieved score
+        # clears the threshold, every retrieved chunk goes into the prompt;
+        # chunks are never filtered one by one. (P7.1 conformance fix: the
+        # code previously filtered per chunk, silently dropping fact-bearing
+        # chunks below the threshold from the prompt; see DECISIONS.)
+        best_score = max((chunk.score for chunk in chunks), default=None)
+        if best_score is None or best_score < evidence_min_score:
             return QueryResult(NO_EVIDENCE_ANSWER, [], True, "low_evidence", None, 0, 0)
         prompt, mapping = build_prompt_v2(question, chunks, canary or "")
         result = llm.complete(prompt)
@@ -94,6 +110,21 @@ def answer_question(
             chunk_texts=[chunk.text for chunk in chunks],
             max_answer_chars=max_answer_chars,
         )
+        if refused and reason == "ungrounded":
+            # Citation repair (P7.1): the answer carried no valid citation.
+            # Retry once with an explicit cite-the-chunks instruction; refuse
+            # only if the retry also has none. Both provider calls count
+            # against the caps, like any other call. No other refusal kind
+            # (low_evidence, output_blocked) is retried.
+            result = llm.complete(prompt + CITATION_REPAIR_SUFFIX)
+            answer, cited, refused, reason, invalid = validate_output(
+                result.text,
+                mapping,
+                canary=canary,
+                require_citation=require_citation,
+                chunk_texts=[chunk.text for chunk in chunks],
+                max_answer_chars=max_answer_chars,
+            )
         return QueryResult(answer, cited, refused, reason, result, invalid, len(chunks))
 
     chunks = [chunk for chunk in chunks if chunk.score >= MIN_EVIDENCE_SCORE]

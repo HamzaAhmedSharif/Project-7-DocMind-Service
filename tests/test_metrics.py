@@ -83,7 +83,9 @@ def test_refused_low_evidence_moves_the_outcome_counter(make_client):
 
 
 def test_uncited_answer_refuses_as_ungrounded(make_client):
-    client = make_client(llm=ScriptedLLM(["Nothing useful at all."]))
+    # P7.1: the citation-repair retry also returns an uncited answer, so the
+    # refusal stands after two provider calls.
+    client = make_client(llm=ScriptedLLM(["Nothing useful at all.", "Nothing useful at all."]))
     before = sample(
         "docmind_query_total", {"outcome": "refused_ungrounded", "principal": "anonymous"}
     )
