@@ -106,10 +106,29 @@ The nine checks: image revision label equals the commit; `/healthz` 200 and comm
 
 What this baseline does not prove:
 
-- public reachability — there is no persistent host; the smoke runs in CI;
+- public reachability of the API — the smoke runs in CI; the public demo added 2026-11-07 exposes a UI front end only, no API;
 - how a free host behaves when idle — no idle period is exercised;
 - long-running stability — the run is minutes, not days;
 - behavior under real user traffic — the checks are sequential, not a load test.
+
+## Public demo (2026-11-07)
+
+After M8 closed, on the owner's instruction, a public UI demo was added
+on a free Hugging Face Gradio Space (ZeroGPU), following the Project 6
+pattern: the service package at `79c596a` is copied unchanged, a Gradio
+front end calls the FastAPI app in-process (anonymous, public tenant,
+demo configuration), and the Space's secrets are the production Neon
+strings plus a dedicated Groq key (`hf-demo`). Docker Spaces are
+paywalled behind Hugging Face PRO, and the M5 host evaluation's
+reservations about the Gradio route (not the gated image; a
+GPU-decorated function on a CPU workload; the last free slot) are
+recorded in `DECISIONS.md` and stand as disclosed trade-offs. Live
+verification on 2026-11-07, anonymous through the Space's Gradio API:
+the demo question d01 answered with citations (pp. 24-25,
+semantic-cache hit); a novel on-corpus question about the MAP function
+answered with a live generation (1 LLM call, 388 prompt tokens,
+citation p. 30); an off-corpus question refused with `low_evidence`.
+The demo changes no M8 measurement; S1 stands as recorded.
 
 ## Service-level evaluation (M8)
 

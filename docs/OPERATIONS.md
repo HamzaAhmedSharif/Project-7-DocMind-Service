@@ -14,6 +14,8 @@
 
 Evidence log: `northflank.com/docs/v1/application/billing/project-types`, `northflank.com/pricing`, `docs.railway.com/platform/compare-to-northflank`, `koyeb.com/docs/faqs/pricing`, `huggingface.co/docs/hub/en/spaces-overview`, the Hugging Face forum thread "Docker SDK now marked as Paid" (July 2026), `snapdeploy.dev` (vendor pages).
 
+Update (2026-11-07): on the owner's instruction, the Hugging Face Gradio route was adopted after Project 7 closed for a UI-only public demo, in the Project 6 form. The three reservations in the row above stand and are disclosed in the demo's README and in `DECISIONS.md`; release verification remains the evidence for the gated image, and no API is publicly exposed.
+
 ## How to run the release image
 
 The release image is `ghcr.io/hamzaahmedsharif/docmind-service:sha-<7-char-commit>`. It carries its commit in `DOCMIND_GIT_SHA`, set at build time with `--build-arg GIT_SHA=<commit>`, and the revision in the `org.opencontainers.image.revision` label.
@@ -192,10 +194,12 @@ Neon instance.
   *before* the provider call, so a failed provider call still spends
   budget (by design: it prevents retry storms against a dead
   provider).
-- There is no persistent public host (Amendment A1): the release image
-  is verified by the `release-smoke` workflow under a 512 MB limit
-  against Neon after every green `main` CI run. No scheduled pings are
-  used anywhere.
+- There is no persistent public host for the API (Amendment A1): the
+  release image is verified by the `release-smoke` workflow under a
+  512 MB limit against Neon after every green `main` CI run. No
+  scheduled pings are used anywhere. A public UI-only demo exists on a
+  free Hugging Face Space since 2026-11-07 (see `DECISIONS.md`); it
+  exposes no API and sleeps when idle.
 
 ### Budget accounting
 
@@ -203,7 +207,10 @@ Provider requests are counted per UTC day across everything that uses
 the key: the release-smoke (at most 1 per run), local measurement runs
 and any live check. The combined ceiling is 800/day
 (`global_daily_llm_cap`); M8's service evaluation has its own budget
-of at most 100 requests (at most 60 per UTC day). Check the ledger
+of at most 100 requests (at most 60 per UTC day). The public demo
+(2026-11-07) uses a dedicated Groq key (`hf-demo`) but the same
+Postgres counters, so its calls spend from the same 300/day anonymous
+and 800/day global caps. Check the ledger
 before and after any provider run:
 
 ```

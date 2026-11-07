@@ -11,9 +11,10 @@ and a semantic cache. It is the service form of
 (Project 6), built to find out what changes when a notebook-grade RAG pipeline
 has to survive an API contract, tenants, abuse controls and a load test.
 
-**What it is not:** a public product. There is no public instance and no
-payment card anywhere in the project; the release image is verified in CI
-against managed Postgres and the real provider (below). The evaluation corpus
+**What it is not:** a public product, and no payment card exists anywhere
+in the project. A public UI demo runs on a free Hugging Face Space (see
+Live demo); the raw API is not publicly exposed, and the release image is
+verified in CI against managed Postgres and the real provider (below). The evaluation corpus
 is one famous paper, so the model's own memory of it is a confound; held-out
 evaluation on papers the model cannot know is Project 9's work, prepared here
 as `evaluation/heldout/manifest.json`.
@@ -35,6 +36,25 @@ Measured on the M5 verification run (GitHub-hosted runner, 512 MB container
 limit, Neon free plan, Frankfurt): readiness 1.102 s, first query 1.98 s,
 warm query 0.556 s, peak memory 230.8 MiB. Conditions for every number are in
 [`docs/FACTS.md`](docs/FACTS.md).
+
+## Live demo
+
+A public demo of the service runs as a Gradio front end on a free Hugging
+Face Space: https://hamzaahmedsharif-docmind-service.hf.space/ (Space page:
+https://huggingface.co/spaces/HamzaAhmedSharif/DocMind-Service). The front
+end calls the real FastAPI app in-process (anonymous, public tenant) over
+the seeded NIST demo corpus, with the demo configuration from
+`deploy/release.env`. The service code is this repository at `79c596a`,
+copied unchanged; only the front end is new, and one dependency pin
+differs in the Space (`pydantic` 2.11.10; Gradio 5.49.1 requires < 2.12).
+The Space sleeps when idle on the free tier and is capped at 300
+questions/day by the same Postgres-backed demo cap as every other
+instance. Verified live on 2026-11-07: an on-corpus question answered
+with page citations, a novel on-corpus question generated live (1 LLM
+call), and an off-corpus question refused (`low_evidence`). The demo is a
+convenience for readers; the release verification above remains the
+deployment evidence for the gated image. The decision and its recorded
+reservations are in `DECISIONS.md`.
 
 ## Architecture
 
@@ -138,7 +158,9 @@ bound the throughput: [`docs/CAPACITY.md`](docs/CAPACITY.md).
 - **Single instance.** One worker, in-process per-IP limiter; the design
   targets free tiers, not horizontal scale (the load numbers with their
   conditions are in `docs/FACTS.md`).
-- **No public instance** (see Release verification).
+- **Public demo is UI-only.** The Hugging Face Space exposes a Gradio
+  front end, not the raw API, and sleeps when idle on the free tier
+  (see Live demo).
 
 ## Quick start
 
@@ -177,16 +199,4 @@ test fails if `openapi.json` is out of date.
 ## Documents
 
 - [`docs/EVALUATION.md`](docs/EVALUATION.md) — every gate, method and result,
-  the Project 6 comparison, the recall curve, the confounds.
-- [`docs/ARCHITECTURE.md`](docs/ARCHITECTURE.md) — components and data flows.
-- [`docs/CAPACITY.md`](docs/CAPACITY.md) — the capacity model and its inputs.
-- [`docs/SECURITY.md`](docs/SECURITY.md) — threat table and residual risks.
-- [`docs/OPERATIONS.md`](docs/OPERATIONS.md) — runbook, settings, drills.
-- [`docs/FACTS.md`](docs/FACTS.md) — every public number with its source,
-  conditions, commit and date, plus the allowed and forbidden claims.
-- [`DECISIONS.md`](DECISIONS.md) — decisions and their evidence.
-- [`SECURITY.md`](SECURITY.md) — how to report a vulnerability.
-
-## License
-
-MIT, see `LICENSE`.
+  the Project 6 comparison, the recall curve, th

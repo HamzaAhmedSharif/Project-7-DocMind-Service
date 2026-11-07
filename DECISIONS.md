@@ -541,3 +541,44 @@ Notes are recorded in the milestone sections below.
 - Chosen: the README quick start mirrors CI — create a throwaway key in
   the local stack and pass it to the smoke script through an environment
   variable. Verified end-to-end by the clean-clone rehearsal.
+
+### Public demo on a Hugging Face Gradio Space (2026-11-07)
+
+- Context: Project 7 closed at `79c596a` with no persistent public
+  instance (Amendment A1). The M5 host evaluation in
+  `docs/OPERATIONS.md` had marked the Gradio/ZeroGPU route OUT for
+  three reasons: it is not the gated container image, ZeroGPU expects
+  a GPU-decorated function on what is a CPU workload, and it consumes
+  the second and last free Gradio slot. On 2026-11-07 the owner
+  instructed a public demo link anyway, in the Project 6 form. Hugging
+  Face Docker Spaces were verified paywalled behind PRO ($9/month)
+  the same day; the zero-cost rule bars subscribing without the
+  owner's explicit word, which was not given.
+- Chosen: a Gradio Space (ZeroGPU free, public) whose front end calls
+  the real FastAPI app in-process (anonymous, public tenant) over the
+  seeded NIST demo corpus, the service package byte-identical to
+  `79c596a`, the demo configuration from `deploy/release.env`, and
+  secrets = the production Neon strings plus a dedicated Groq key
+  (`hf-demo`) held as Space secrets only.
+- Adaptations, disclosed in the Space README: pydantic 2.11.10 in the
+  Space only (Gradio 5.49.1 requires pydantic < 2.12; the repository
+  pin 2.14.1 is unchanged — the first Space build failed on exactly
+  this conflict), and `DOCMIND_DEMO_IP_PER_MIN=60` in the Space only
+  (all UI traffic shares one in-process client bucket, so per-IP
+  limiting cannot distinguish visitors there; the Postgres-backed
+  300/day anonymous and 800/day global caps are unchanged and
+  shared). The one GPU-decorated function is an explicitly clicked
+  warm-up that loads the embedding model and embeds a probe sentence;
+  asking is not decorated and spends no GPU quota.
+- Verification: Space RUNNING on zero-a10g (Space commits `69c7af7`
+  initial, build failed on the pydantic conflict; `af74e45` with the
+  adaptation, RUNNING). Anonymous live checks on 2026-11-07 through
+  the Space's Gradio API: d01 answered with citations (pp. 24-25,
+  semantic-cache hit); a novel question about the MAP function
+  answered with a live generation (1 LLM call, 388 prompt tokens,
+  citation p. 30); an off-corpus question refused (`low_evidence`).
+- Consequence: the A1 posture is superseded for a UI demo only.
+  Release verification remains the deployment evidence for the gated
+  image, and the three M5 reservations stand as accepted trade-offs,
+  recorded here rather than silently dropped. The demo sleeps after
+  48 h idle (free-tier `gcTimeout` 172800).

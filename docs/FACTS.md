@@ -13,7 +13,9 @@ Every public number with its source and conditions. A number quoted without its 
 | Database engine | pgvector 0.8.6 on PostgreSQL 18.6 | Neon free plan; verified in the neon-seed run | neon-seed run 41807236461 | c149900 | 2026-11-04 |
 | Database size after ingest | 11 MB (from 7896 kB) | Neon free plan; 3 documents / 639 chunks | neon-seed run 41807236461 | c149900 | 2026-11-04 |
 | G8-C release-smoke run | success, 9/9 checks | manual dispatch, head `c149900`; GitHub-hosted runner, 512 MB container limit, Neon free plan, Frankfurt | https://github.com/HamzaAhmedSharif/Project-7-DocMind-Service/actions/runs/41809139449 | c149900 | 2026-11-04 |
-| Hosting status | no persistent public instance | no persistent host; every free container host checked on 2026-11-04 either required a card or restricted the runtime | `docs/OPERATIONS.md` | c149900 | 2026-11-04 |
+| Hosting status | public UI demo on a free Hugging Face Space (ZeroGPU); raw API not exposed | Gradio front end over the service code at `79c596a`, anonymous public tenant, seeded NIST demo corpus; created 2026-11-07 on the owner's instruction, after every free container host checked on 2026-11-04 either required a card or restricted the runtime | https://huggingface.co/spaces/HamzaAhmedSharif/DocMind-Service | 79c596a | 2026-11-07 |
+| Public demo verification | cited answer (cache hit, pp. 24-25) + live-generated cited answer (1 LLM call, 388 prompt tokens, p. 30) + off-corpus refusal `low_evidence` | asked anonymously through the live Space's Gradio API, 2026-11-07 | https://hamzaahmedsharif-docmind-service.hf.space/ | 79c596a | 2026-11-07 |
+| Public demo deltas vs release config | `DOCMIND_DEMO_IP_PER_MIN` 60 (release: 5); pydantic 2.11.10 (repo: 2.14.1) | Space-only adaptations, disclosed in the Space README: all UI traffic shares one in-process client bucket; Gradio 5.49.1 requires pydantic < 2.12; daily caps unchanged (300 anonymous / 800 global, Postgres-backed) | Space repository `app.py`, `requirements.txt` | 79c596a | 2026-11-07 |
 | A1.6 free-host probes | not run | optional supplement probes were not executed; no host was tested | this file | — | 2026-11-04 |
 | API-key format and storage | `dm_<8 hex>_<32 URL-safe chars>`; prefix + SHA-256 only | offline unit/integration tests; full key shown once and never stored | `docmind_service/auth.py`, `tests/test_auth.py` | — | 2026-11-04 |
 | Tenant isolation | two keys, same PDF -> two documents | offline API isolation matrix; list/delete/query/document filter; SQL cache/auth integration tests | `tests/test_tenancy.py`, `tests/test_m6_integration.py` | — | 2026-11-04 |
@@ -83,7 +85,7 @@ Sentences this project may make, because each is backed above:
 <!-- claims-check-ignore-end -->
 - Any accuracy claim for multi-agent answering in this service (not implemented; the capacity model's multi-agent rows are derived from Project 6 and labelled as such).
 - Any retrieval or answer-quality claim about documents other than the one evaluated paper.
-- "Deployed" without a green release-verification run linked in the same file; there is no persistent public instance.
+- "Deployed" for the API without a green release-verification run linked in the same file; the public demo is a UI front end on a free Space, not the raw API, and is never described as the gated image running.
 
 Numbers that must not be used without their conditions:
 
