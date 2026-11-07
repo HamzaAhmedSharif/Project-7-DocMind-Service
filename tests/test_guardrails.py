@@ -276,6 +276,8 @@ def test_citation_repair_recovers_a_grounded_answer():
     assert [citation.chunk_id for citation in result.citations] == ["x:1"]
     assert len(llm.prompts) == 2
     assert "did not cite" in llm.prompts[1]
+    # Usage reports both provider calls (caps and evaluation count from it).
+    assert result.llm.calls == 2
 
 
 def test_citation_repair_never_fires_on_a_canary_block():

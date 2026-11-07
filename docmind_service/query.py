@@ -113,10 +113,21 @@ def answer_question(
         if refused and reason == "ungrounded":
             # Citation repair (P7.1): the answer carried no valid citation.
             # Retry once with an explicit cite-the-chunks instruction; refuse
-            # only if the retry also has none. Both provider calls count
-            # against the caps, like any other call. No other refusal kind
-            # (low_evidence, output_blocked) is retried.
+            # only if the retry also has none. No other refusal kind
+            # (low_evidence, output_blocked) is retried. The merged result
+            # sums both calls: usage in the response is what the caps audit
+            # and the evaluation count, so a repaired query must report the
+            # attempts and tokens of the first call as well as the retry's.
+            first = result
             result = llm.complete(prompt + CITATION_REPAIR_SUFFIX)
+            result = LLMResult(
+                text=result.text,
+                calls=first.calls + result.calls,
+                prompt_tokens=first.prompt_tokens + result.prompt_tokens,
+                completion_tokens=first.completion_tokens + result.completion_tokens,
+                api_seconds=first.api_seconds + result.api_seconds,
+                wait_seconds=first.wait_seconds + result.wait_seconds,
+            )
             answer, cited, refused, reason, invalid = validate_output(
                 result.text,
                 mapping,
