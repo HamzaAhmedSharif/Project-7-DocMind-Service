@@ -63,6 +63,9 @@ Every public number with its source and conditions. A number quoted without its 
 | Budget incident | a leftover one-shot scheduled task re-executed runs A and B overnight (2026-11-06 23:59): +38 requests; the day-cap accounting and the recovery are recorded in `DECISIONS.md` | duplicate measurements discarded; canonical A / B restored from the committed results file | `reports/provider-ledger.csv` | b1dea68 | 2026-11-07 |
 | M8 provider requests, total | 97 by the ledger — 2026-11-06: 83 including the 38 duplicate-run requests; 2026-11-07: 14 (run C 4, C repairs 5 + 3, checkpoint 2). Release-verification runs spend 1 request each and are reported with the release track, as at M7 | caps: 100 for the milestone (met), 60 per day (exceeded on 2026-11-06 — see the incident row) | `reports/provider-ledger.csv` | b1dea68 | 2026-11-07 |
 
+| Live verification on the final code head | release-smoke success, 9/9 checks, commit `617f16d`, 2026-11-07 | GitHub-hosted runner, 512 MB container limit, Neon free plan, Frankfurt; 1 provider request | https://github.com/HamzaAhmedSharif/Project-7-DocMind-Service/actions/runs/42343057863 | 617f16d | 2026-11-07 |
+| Clean-clone rehearsal | PASS-WITH-NOTES: the README quick start (compose up, throwaway key, smoke) passes 14/14 from a fresh clone of the final head; the fresh-venv leg cannot install the locked environment on Windows because `requirements.lock` pins `uvloop`, which does not support Windows — the service targets Linux, where CI and Docker are green | rehearsals 2026-11-06/07; the earlier attempts' failures were hotspot connection resets and a Windows pytest tmpdir artifact, both recorded in `reports/REVIEW-PACK.md` | `reports/REVIEW-PACK.md` | 617f16d | 2026-11-07 |
+
 ## Allowed claims
 
 Sentences this project may make, because each is backed above:

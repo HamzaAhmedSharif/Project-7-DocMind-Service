@@ -29,7 +29,7 @@ must pass: the image matches the commit, the service is healthy and ready,
 the sample corpus is present, a question returns a cited answer, a nonsense
 question is refused, uploads are blocked for anonymous callers, and the rate
 limit triggers. Latest run:
-https://github.com/HamzaAhmedSharif/Project-7-DocMind-Service/actions/runs/41932491014
+https://github.com/HamzaAhmedSharif/Project-7-DocMind-Service/actions/runs/42343057863
 
 Measured on the M5 verification run (GitHub-hosted runner, 512 MB container
 limit, Neon free plan, Frankfurt): readiness 1.102 s, first query 1.98 s,

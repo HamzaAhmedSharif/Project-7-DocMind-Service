@@ -100,7 +100,7 @@ Completed 2026-11-03. Pull request: https://github.com/HamzaAhmedSharif/Project-
 
 ## Release verification
 
-Every push to `main` runs the nine-check release smoke against the release image, managed Postgres (Neon free plan, pgvector) and the real LLM provider, under a 512 MB container limit. The latest green run is https://github.com/HamzaAhmedSharif/Project-7-DocMind-Service/actions/runs/41809139449 (commit `c149900`, 9/9). Conditions: GitHub-hosted runner, 512 MB container limit, Neon free plan, Frankfurt. Numbers: readiness 1.102 s, first query 1.98 s, warm query 0.556 s, peak memory 230.8 MiB.
+Every push to `main` runs the nine-check release smoke against the release image, managed Postgres (Neon free plan, pgvector) and the real LLM provider, under a 512 MB container limit. The latest green run is https://github.com/HamzaAhmedSharif/Project-7-DocMind-Service/actions/runs/42343057863 (commit `617f16d`, 9/9). Conditions: GitHub-hosted runner, 512 MB container limit, Neon free plan, Frankfurt.
 
 The nine checks: image revision label equals the commit; `/healthz` 200 and commit matches; `/readyz` database and embedder ok; landing page 200 HTML with CSP; demo documents listed; sample question answered with a citation; nonsense question refused; anonymous upload 403; rapid queries hit the per-IP cap.
 
