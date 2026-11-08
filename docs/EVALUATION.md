@@ -220,6 +220,66 @@ measured in run C — the model declines from an empty context in both
 configurations. Mean prompt tokens fall to 1741 in run C because the
 validator's retry loop never runs.
 
+## S1 remediation (P7.1) — after remediation (post-hoc iteration, tuned on the evaluation questions)
+
+M8 closed with S1 failing its gate in both guardrails-on runs, and the
+decomposition pointed at two mechanisms inside the service stack: the
+evidence gate and the all-or-nothing grounding validator. P7.1 changed
+the code on the strength of that decomposition, not the gate: the
+evidence gate was conformed to the M6.4 spec (a top-1 test only — the
+shipped code had filtered chunks one by one, dropping fact-bearing
+chunks below the threshold from the prompt), and a citation-repair
+retry was added (one retry, on an `ungrounded` outcome only, with an
+explicit cite-the-chunks instruction). Usage accounting after a retry
+now merges both calls. Prompt v2, sanitization, thresholds and the
+gates are unchanged; the runs below are labelled exactly as they are —
+after remediation (post-hoc iteration, tuned on the evaluation
+questions). Tuned on the same 12 questions; held-out check is
+Project 9.
+
+Method. Runs A2 (2026-11-07) and B2 (2026-11-08) use image
+`docmind-service:p71` (commits `1925429`, `c49699b`) and the same
+configuration, corpus, questions and failure rule as M8's runs A and
+B. Both crossed the provider 503 wall: A2 needed five repair rounds
+(a03, a04 never answered), B2 three (d10, a01–a04 never answered).
+R1 was re-run last, on arm only, 1 repeat (see `DECISIONS.md` for why
+the second repeat was dropped).
+
+| Gate | Threshold | Run A (M8) | Run B (M8) | Run A2 | Run B2 |
+|---|---|---|---|---|---|
+| S1 key facts | ≥ 22 / 26 | 10 / 26 | 16 / 26 | 22 / 26 | 17 / 26 |
+| S2 abstentions | ≥ 3 / 4 | 4 / 4 | 4 / 4 | 2 / 4 (a03, a04 unmeasurable) | 0 / 4 (all four unmeasurable) |
+| S3a valid citations | ≥ 0.95 | 1.000 | 1.000 | 1.000 | 1.000 |
+| S3b answers with citation | ≥ 0.90 | 0.875 | 1.000 | 0.846 | 0.643 |
+| S4 citation supports fact | ≥ 0.75 target | 0.667 | 0.875 | 0.909 | 0.889 |
+| S5 mean prompt tokens | ≤ 3200 | 2002 | 2351 | 2083 | 1572 |
+
+Per-question, A2 vs B2 (facts found / total): d01 2/2, 2/2; d02 2/3,
+3/3; d03 2/2, 1/2; d04 2/2, 2/2; d05 2/2, 2/2; d06 2/2, 2/2; d07 3/3,
+2/3; d08 2/2, 2/2; d09 refused `ungrounded` 0/2 in both runs, even
+after the repair retry; d10 2/2, unmeasured (503 on every attempt);
+d11 2/2, refused `ungrounded` 0/2 even after the repair retry; d12
+1/2, 1/2. The three M8 losses the remediation targeted — d07 (gate
+funnel), d03 and d11 (validator refusals) — all recovered in A2
+(3/3, 2/2, 2/2) but only partly in B2 (2/3, 1/2, refused). d09 still
+refuses in both runs: the repair retry cannot help where the draft
+itself carries no valid citation. d02 and d12 stay partial in both
+runs.
+
+What the two runs say together. A2 met the S1 gate (22/26) and B2 did
+not (17/26) on identical code, so the remediation's measured effect is
+smaller than run-to-run provider nondeterminism on this set (the A2–B2
+gap is 5 facts; the M8 A–B gap after repair was 6). Neither run alone
+proves a stable pass or a stable fail; the honest reading is that the
+gate conformance and the repair retry recovered the three targeted
+losses in one run and not the other. S2 cannot be compared across the
+two runs: A2 measured two abstentions and left two questions
+unmeasured, B2 measured none. R1 re-confirmation (on arm, 1 repeat):
+0/15 attacks succeeded, model resisted 15/15 — the repair retry did
+not weaken injection resistance. Provider spend for P7.1: 42 recorded
+requests (A2 14, B2 13, R1 15) against the 100 cap; A2's 14 is a lower
+bound under the pre-fix accounting (see `DECISIONS.md`).
+
 ### Project 6 vs Project 7 on the same questions
 
 | | P6 baseline (single) | P6 single call | P6 multi-agent | P7 run A | P7 run B |

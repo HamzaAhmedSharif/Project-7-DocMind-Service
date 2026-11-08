@@ -582,3 +582,123 @@ Notes are recorded in the milestone sections below.
   image, and the three M5 reservations stand as accepted trade-offs,
   recorded here rather than silently dropped. The demo sleeps after
   48 h idle (free-tier `gcTimeout` 172800).
+
+### P7.1: S1 remediation — evidence gate conformed to the M6.4 spec, citation-repair retry (2026-11-07/08)
+
+- Context: M8 recorded S1 at 10/26 (run A) and 16/26 (run B) against
+  the pre-registered gate of 22/26, with the shortfall decomposed as
+  the evidence gate (5 facts: d07, d09), the all-or-nothing grounding
+  validator (4 facts: d03, d11), and a partial answer (1 fact: d12).
+  The M6.4 spec defines the evidence gate as a top-1 test — "if the
+  best score is below EVIDENCE_MIN_SCORE, refuse" — and calibrates
+  the threshold on top-1 scores only (minimum answerable top-1 0.3737
+  -> 0.35). The shipped code instead filtered chunks one by one
+  (`chunks = [chunk for chunk in chunks if chunk.score >=
+  evidence_min_score]`), silently dropping fact-bearing chunks below
+  the threshold from the prompt even when the best chunk cleared it.
+  The deviation was found from Claude's hypothesis (the gate, not the
+  validator, was the larger funnel) confirmed by Sol's code read of
+  `docmind_service/query.py`; the calibration entry above already
+  stated the top-1 rule, so the code, not the spec, was wrong.
+- Chosen: three changes, approved by Hamza on 2026-11-07 with a
+  provider budget of at most 100 requests total and 60 per UTC day.
+  (1) The gate now tests the best score only and every retrieved
+  chunk reaches the prompt (`1925429`). (2) A citation-repair retry:
+  an answer refused `ungrounded` (no valid citation) is retried once
+  with an explicit cite-the-chunks instruction; the refusal stands
+  only if the retry is also uncited, and no other refusal kind
+  (`low_evidence`, `output_blocked`) is retried (`1925429`).
+  (3) Usage after a repair retry now merges both calls' attempts and
+  tokens, so the response accounting counts every provider call
+  (`c49699b`); before that fix only the final call was counted, which
+  makes run A2's recorded 14 requests a lower bound (see Budget).
+  Prompt v2, context sanitization, every threshold, and
+  `service-eval-m8.json` are unchanged; the gates were not
+  re-registered.
+- Tests updated: the three tests that encoded the pre-fix behaviour
+  were changed with the code, not after it. `test_guardrails`
+  (`test_require_citation_turns_a_bare_answer_into_ungrounded`) now
+  scripts two bare replies and asserts `calls == 2` after a repair;
+  `test_metrics` (`test_uncited_answer_refuses_as_ungrounded`) scripts
+  the uncited reply twice; `test_redteam_harness`
+  (`test_a_guardrail_caught_attack_is_raw_hit_but_not_final_hit`)
+  scripts the same reply twice, so the retry is also refused and the
+  guardrail still catches the attack. 284 unit tests passed locally
+  before each push.
+- Measured, after remediation (post-hoc iteration, tuned on the
+  evaluation questions):
+
+  | Run | S1 key facts | S2 abstentions | S3a | S3b | S4 | S5 mean prompt tokens |
+  |---|---|---|---|---|---|---|
+  | A (M8) | 10 / 26 | 4 / 4 | 1.000 | 0.875 | 0.667 | 2002 |
+  | B (M8) | 16 / 26 | 4 / 4 | 1.000 | 1.000 | 0.875 | 2351 |
+  | A2 (P7.1) | 22 / 26 | 2 / 4 | 1.000 | 0.846 | 0.909 | 2083 |
+  | B2 (P7.1) | 17 / 26 | 0 / 4 recorded | 1.000 | 0.643 | 0.889 | 1572 |
+
+  Tuned on the same 12 questions; held-out check is Project 9.
+  Run A2 (2026-11-07, image `docmind-service:p71`) met the S1 gate
+  at 22/26: d07 recovered 3/3, d03 2/2 and d11 2/2 (all three were
+  M8 losses — d07 gate funnel, d03/d11 validator refusals). Run B2
+  (2026-11-08, same image) measured 17/26 and did not meet the gate:
+  d02 answered 3/3 and d07 2/3, but d03 gave 1/2, d11 was refused
+  `ungrounded` 0/2 even after the repair retry (2 provider calls),
+  and d10 could not be measured at all. d09 was refused `ungrounded`
+  0/2 in both runs even after the repair retry, so the validator
+  refusal survives the repair where the draft itself is ungrounded.
+  d02 (2/3 in A2) and d12 (1/2 in both runs) stay partial. The A2–B2
+  gap is 5 facts, the same scale as the M8 A–B gap (6 after repair):
+  provider nondeterminism across identical requests dominates the
+  remediation effect on this set, so A2 meeting the gate and B2
+  missing it is one measurement each, not a stable pass.
+- S2: A2 recorded 2/4 — a01 and a02 abstained, a03 and a04 were never
+  successfully asked (provider 503 on every attempt across five
+  repair rounds) and count as unmeasurable under the M8 run-C
+  convention. B2 recorded 0/4 — all four absent questions were
+  unmeasurable (503 on the initial run and all three repair rounds),
+  so B2's S2 is a record of provider availability, not of
+  abstention behaviour.
+- R1 re-confirmation: the on arm was re-run last
+  (`evaluation/results/redteam-p71.json`, 15 cases, 1 repeat, on arm
+  only — the off arm was never re-run): 0/15 attacks succeeded,
+  model resisted 15/15, guardrail caught 0, 15 provider requests.
+  The gate (≤ 2/15) still holds after the repair retry. Repeats were
+  dropped from 2 to 1 before the run: the M6 on arm spent 49 requests
+  for 30 nominal (per-repeat 23 and 26), which projected the UTC day
+  to about 62 against the 60 cap; the actual spend was 15 (no retry
+  fired in any of the 15 records), so two repeats would likely have
+  fit — the decision was made on the pre-flight evidence and stands,
+  and the re-confirmation is one repeat. Caveat: with the
+  citation-repair retry, `RecordingLLM.last_text` reflects the final
+  attempt only, so `raw_hit` in the P7.1 red-team file is the final
+  attempt's text; no record in this run needed a second call, so the
+  caveat did not affect the measurement.
+- Budget actuals: P7.1 recorded 42 provider requests against the 100
+  cap — run A2 14 (2026-11-07), run B2 13 (2026-11-08), R1 15
+  (2026-11-08); the UTC-day totals are 14 and 28 against the 60 cap.
+  A2's 14 is a lower bound: it was measured before `c49699b`, when a
+  repair retry's first call was invisible in the response accounting
+  (d09, a01 and a02 each refused `ungrounded` and so each likely spent
+  an uncounted first call), so the true P7.1 total is at most 45.
+  B2 and R1 counts are exact under the merged accounting. 503
+  attempts do not count, by the successful-call convention.
+- Day-1 incidents (2026-11-07): the evening provider 503 wall hit
+  run A2 after a few calls; five repair rounds were needed to measure
+  it, and a03/a04 never got through. A one-shot scheduled task with a
+  start time 5 minutes ahead double-fired; it was killed before any
+  provider call and deleted. Rule adopted: one-shot scheduled tasks
+  use a start date at least a day ahead and are deleted immediately
+  after the run.
+- Day-2 incidents (2026-11-08): run B2's initial run returned 503
+  for 14 of 16 questions (only d01, d02 succeeded); three repair
+  rounds followed, with d10 and a01–a04 still 503 on every attempt —
+  they stand as provider-availability casualties. The `timeout /t`
+  cooldown failed under SSH stdin redirection ("Input redirection is
+  not supported"), so round 1's intended 300 s wait did not execute
+  as a command and the gap was the prep work between runs; rounds 2
+  and 3 used `ping -n 301 127.0.0.1` as the cooldown, which worked.
+  B2's S1 below 22 ends the remediation under Hamza's stop rule: no
+  third remediation round.
+- Would revisit if: Project 9 runs the held-out set and the
+  remediation's effect (or lack of it) is re-priced there; a further
+  S1 attempt would need a new hypothesis and a new budget, not a
+  re-run of these two runs.

@@ -162,6 +162,18 @@ bound the throughput: [`docs/CAPACITY.md`](docs/CAPACITY.md).
   front end, not the raw API, and sleeps when idle on the free tier
   (see Live demo).
 
+Remediation (P7.1, 2026-11-07/08): after M8 the evidence gate was
+conformed to the M6.4 spec (a top-1 test only — the shipped code had
+filtered chunks one by one) and a citation-repair retry was added
+(one retry, on an `ungrounded` outcome only). Measured after
+remediation (post-hoc iteration, tuned on the evaluation questions):
+run A2 met the S1 gate at 22/26 and run B2 measured 17/26 on identical
+code, so the effect is smaller than run-to-run provider nondeterminism
+on this set; the red-team re-check held at 0/15 with guardrails on.
+Tuned on the same 12 questions; held-out check is Project 9. Full
+numbers and the per-question record: `docs/EVALUATION.md`,
+`DECISIONS.md`.
+
 ## Quick start
 
 Prerequisites: Docker, and Python 3.12 for the local checks.
