@@ -1,0 +1,673 @@
+{
+  "runs": {
+    "A2": {
+      "config": {
+        "guardrails": true,
+        "prompt_version": "p7-v2",
+        "evidence_min_score": 0.35,
+        "require_citation": true,
+        "cache_enabled": false
+      },
+      "metrics": {
+        "s1_key_facts_found": 22,
+        "s2_absent_abstained": 2,
+        "s3_valid_citation_share": 1.0,
+        "s3_answers_with_citation_share": 0.8461538461538461,
+        "s4_citation_supports_fact_share": 0.9090909090909091,
+        "s5_mean_prompt_tokens": 2083.3846153846152
+      },
+      "all_facts_questions": 2,
+      "provider_requests": 14,
+      "invalid_citations_delta": 0,
+      "questions": [
+        {
+          "id": "d01",
+          "status": 200,
+          "refused": false,
+          "refusal_reason": null,
+          "citations": [
+            "8c7f83c6-7374-4f3b-b5e2-c7a7067dcee6:6",
+            "8c7f83c6-7374-4f3b-b5e2-c7a7067dcee6:7"
+          ],
+          "prompt_tokens": 2365,
+          "completion_tokens": 125,
+          "api_seconds": 2.5522315870039165,
+          "wait_seconds": 0.0,
+          "calls": 1,
+          "facts_found": 2,
+          "facts_total": 2
+        },
+        {
+          "id": "d02",
+          "status": 200,
+          "refused": false,
+          "refusal_reason": null,
+          "citations": [
+            "8c7f83c6-7374-4f3b-b5e2-c7a7067dcee6:10",
+            "8c7f83c6-7374-4f3b-b5e2-c7a7067dcee6:14"
+          ],
+          "prompt_tokens": 2452,
+          "completion_tokens": 164,
+          "api_seconds": 1.9482043010066263,
+          "wait_seconds": 14.118048388001625,
+          "calls": 1,
+          "facts_found": 2,
+          "facts_total": 3
+        },
+        {
+          "id": "d03",
+          "status": 200,
+          "refused": false,
+          "refusal_reason": null,
+          "citations": [
+            "8c7f83c6-7374-4f3b-b5e2-c7a7067dcee6:12",
+            "8c7f83c6-7374-4f3b-b5e2-c7a7067dcee6:11"
+          ],
+          "prompt_tokens": 2627,
+          "completion_tokens": 216,
+          "api_seconds": 1.8935852680006064,
+          "wait_seconds": 16.7463168809918,
+          "calls": 1,
+          "facts_found": 2,
+          "facts_total": 2
+        },
+        {
+          "id": "d04",
+          "status": 200,
+          "refused": false,
+          "refusal_reason": null,
+          "citations": [
+            "8c7f83c6-7374-4f3b-b5e2-c7a7067dcee6:8"
+          ],
+          "prompt_tokens": 2437,
+          "completion_tokens": 174,
+          "api_seconds": 2.8253831549955066,
+          "wait_seconds": 0.0,
+          "calls": 1,
+          "facts_found": 2,
+          "facts_total": 2
+        },
+        {
+          "id": "d05",
+          "status": 200,
+          "refused": false,
+          "refusal_reason": null,
+          "citations": [
+            "8c7f83c6-7374-4f3b-b5e2-c7a7067dcee6:30"
+          ],
+          "prompt_tokens": 2442,
+          "completion_tokens": 57,
+          "api_seconds": 0.9122675440012245,
+          "wait_seconds": 0.0,
+          "calls": 1,
+          "facts_found": 2,
+          "facts_total": 2
+        },
+        {
+          "id": "d06",
+          "status": 200,
+          "refused": false,
+          "refusal_reason": null,
+          "citations": [
+            "8c7f83c6-7374-4f3b-b5e2-c7a7067dcee6:13",
+            "8c7f83c6-7374-4f3b-b5e2-c7a7067dcee6:14",
+            "8c7f83c6-7374-4f3b-b5e2-c7a7067dcee6:10",
+            "8c7f83c6-7374-4f3b-b5e2-c7a7067dcee6:12"
+          ],
+          "prompt_tokens": 2317,
+          "completion_tokens": 368,
+          "api_seconds": 2.5503870849934174,
+          "wait_seconds": 11.44844738766648,
+          "calls": 1,
+          "facts_found": 2,
+          "facts_total": 2
+        },
+        {
+          "id": "d07",
+          "status": 200,
+          "refused": false,
+          "refusal_reason": null,
+          "citations": [
+            "8c7f83c6-7374-4f3b-b5e2-c7a7067dcee6:18"
+          ],
+          "prompt_tokens": 2531,
+          "completion_tokens": 139,
+          "api_seconds": 2.1738920860079816,
+          "wait_seconds": 0.0,
+          "calls": 1,
+          "facts_found": 3,
+          "facts_total": 3
+        },
+        {
+          "id": "d08",
+          "status": 200,
+          "refused": false,
+          "refusal_reason": null,
+          "citations": [
+            "8c7f83c6-7374-4f3b-b5e2-c7a7067dcee6:25",
+            "8c7f83c6-7374-4f3b-b5e2-c7a7067dcee6:26"
+          ],
+          "prompt_tokens": 2620,
+          "completion_tokens": 162,
+          "api_seconds": 0.9914183590008179,
+          "wait_seconds": 0.0,
+          "calls": 1,
+          "facts_found": 2,
+          "facts_total": 2
+        },
+        {
+          "id": "d09",
+          "status": 200,
+          "refused": true,
+          "refusal_reason": "ungrounded",
+          "citations": [],
+          "prompt_tokens": 2950,
+          "completion_tokens": 98,
+          "api_seconds": 0.7436562860093545,
+          "wait_seconds": 0.0,
+          "calls": 1,
+          "facts_found": 0,
+          "facts_total": 2
+        },
+        {
+          "id": "d10",
+          "status": 200,
+          "refused": false,
+          "refusal_reason": null,
+          "citations": [
+            "8c7f83c6-7374-4f3b-b5e2-c7a7067dcee6:27"
+          ],
+          "prompt_tokens": 2761,
+          "completion_tokens": 167,
+          "api_seconds": 2.2110183160111774,
+          "wait_seconds": 0.0,
+          "calls": 1,
+          "facts_found": 2,
+          "facts_total": 2
+        },
+        {
+          "id": "d11",
+          "status": 200,
+          "refused": false,
+          "refusal_reason": null,
+          "citations": [
+            "8c7f83c6-7374-4f3b-b5e2-c7a7067dcee6:21",
+            "8c7f83c6-7374-4f3b-b5e2-c7a7067dcee6:22",
+            "8c7f83c6-7374-4f3b-b5e2-c7a7067dcee6:20"
+          ],
+          "prompt_tokens": 2241,
+          "completion_tokens": 293,
+          "api_seconds": 2.748836067999946,
+          "wait_seconds": 19.937089945656286,
+          "calls": 1,
+          "facts_found": 2,
+          "facts_total": 2
+        },
+        {
+          "id": "d12",
+          "status": 200,
+          "refused": false,
+          "refusal_reason": null,
+          "citations": [
+            "8c7f83c6-7374-4f3b-b5e2-c7a7067dcee6:15",
+            "8c7f83c6-7374-4f3b-b5e2-c7a7067dcee6:9"
+          ],
+          "prompt_tokens": 2291,
+          "completion_tokens": 138,
+          "api_seconds": 2.096287434993428,
+          "wait_seconds": 17.15538093599607,
+          "calls": 1,
+          "facts_found": 1,
+          "facts_total": 2
+        },
+        {
+          "id": "a01",
+          "status": 200,
+          "refused": true,
+          "refusal_reason": "ungrounded",
+          "citations": [],
+          "prompt_tokens": 2813,
+          "completion_tokens": 58,
+          "api_seconds": 1.6807830379984807,
+          "wait_seconds": 19.050014493995697,
+          "calls": 1,
+          "abstained": true
+        },
+        {
+          "id": "a02",
+          "status": 200,
+          "refused": true,
+          "refusal_reason": "ungrounded",
+          "citations": [],
+          "prompt_tokens": 2954,
+          "completion_tokens": 64,
+          "api_seconds": 0.794503507000627,
+          "wait_seconds": 0.0,
+          "calls": 1,
+          "abstained": true
+        },
+        {
+          "id": "a03",
+          "status": 503,
+          "refused": false,
+          "refusal_reason": null,
+          "citations": [],
+          "prompt_tokens": 0,
+          "completion_tokens": 0,
+          "api_seconds": null,
+          "wait_seconds": null,
+          "calls": 0,
+          "abstained": false
+        },
+        {
+          "id": "a04",
+          "status": 503,
+          "refused": false,
+          "refusal_reason": null,
+          "citations": [],
+          "prompt_tokens": 0,
+          "completion_tokens": 0,
+          "api_seconds": null,
+          "wait_seconds": null,
+          "calls": 0,
+          "abstained": false
+        }
+      ],
+      "repairs": [
+        {
+          "questions": [
+            "d04",
+            "d05",
+            "d06",
+            "d07",
+            "d08",
+            "d09",
+            "d10",
+            "d11",
+            "d12",
+            "a01",
+            "a02",
+            "a03",
+            "a04"
+          ],
+          "provider_requests": 5,
+          "reason": "transient provider 503s in the original run"
+        },
+        {
+          "questions": [
+            "d07",
+            "d08",
+            "d09",
+            "d10",
+            "a01",
+            "a02",
+            "a03",
+            "a04"
+          ],
+          "provider_requests": 2,
+          "reason": "transient provider 503s in the original run"
+        },
+        {
+          "questions": [
+            "d09",
+            "d10",
+            "a01",
+            "a02",
+            "a03",
+            "a04"
+          ],
+          "provider_requests": 1,
+          "reason": "transient provider 503s in the original run"
+        },
+        {
+          "questions": [
+            "d10",
+            "a01",
+            "a02",
+            "a03",
+            "a04"
+          ],
+          "provider_requests": 2,
+          "reason": "transient provider 503s in the original run"
+        },
+        {
+          "questions": [
+            "a02",
+            "a03",
+            "a04"
+          ],
+          "provider_requests": 1,
+          "reason": "transient provider 503s in the original run"
+        }
+      ]
+    },
+    "B2": {
+      "config": {
+        "guardrails": true,
+        "prompt_version": "p7-v2",
+        "evidence_min_score": 0.35,
+        "require_citation": true,
+        "cache_enabled": false
+      },
+      "metrics": {
+        "s1_key_facts_found": 17,
+        "s2_absent_abstained": 0,
+        "s3_valid_citation_share": 1.0,
+        "s3_answers_with_citation_share": 0.6428571428571429,
+        "s4_citation_supports_fact_share": 0.8888888888888888,
+        "s5_mean_prompt_tokens": 1572.4285714285713
+      },
+      "all_facts_questions": 2,
+      "provider_requests": 13,
+      "invalid_citations_delta": 0,
+      "questions": [
+        {
+          "id": "d01",
+          "status": 200,
+          "refused": false,
+          "refusal_reason": null,
+          "citations": [
+            "a14c1d29-b4f2-434e-9223-c5089384e840:6"
+          ],
+          "prompt_tokens": 2364,
+          "completion_tokens": 117,
+          "api_seconds": 2.743253594991984,
+          "wait_seconds": 0.0,
+          "calls": 1,
+          "facts_found": 2,
+          "facts_total": 2
+        },
+        {
+          "id": "d02",
+          "status": 200,
+          "refused": false,
+          "refusal_reason": null,
+          "citations": [
+            "a14c1d29-b4f2-434e-9223-c5089384e840:10",
+            "a14c1d29-b4f2-434e-9223-c5089384e840:14"
+          ],
+          "prompt_tokens": 2399,
+          "completion_tokens": 269,
+          "api_seconds": 1.242544418986654,
+          "wait_seconds": 0.0,
+          "calls": 1,
+          "facts_found": 3,
+          "facts_total": 3
+        },
+        {
+          "id": "d03",
+          "status": 200,
+          "refused": false,
+          "refusal_reason": null,
+          "citations": [
+            "a14c1d29-b4f2-434e-9223-c5089384e840:12",
+            "a14c1d29-b4f2-434e-9223-c5089384e840:11"
+          ],
+          "prompt_tokens": 2628,
+          "completion_tokens": 151,
+          "api_seconds": 2.8405147710000165,
+          "wait_seconds": 0.0,
+          "calls": 1,
+          "facts_found": 1,
+          "facts_total": 2
+        },
+        {
+          "id": "d04",
+          "status": 200,
+          "refused": false,
+          "refusal_reason": null,
+          "citations": [
+            "a14c1d29-b4f2-434e-9223-c5089384e840:8",
+            "a14c1d29-b4f2-434e-9223-c5089384e840:16"
+          ],
+          "prompt_tokens": 2436,
+          "completion_tokens": 123,
+          "api_seconds": 0.9889294560125563,
+          "wait_seconds": 0.0,
+          "calls": 1,
+          "facts_found": 2,
+          "facts_total": 2
+        },
+        {
+          "id": "d05",
+          "status": 200,
+          "refused": false,
+          "refusal_reason": null,
+          "citations": [
+            "a14c1d29-b4f2-434e-9223-c5089384e840:30"
+          ],
+          "prompt_tokens": 2441,
+          "completion_tokens": 74,
+          "api_seconds": 1.9337130980275106,
+          "wait_seconds": 14.140800625010161,
+          "calls": 1,
+          "facts_found": 2,
+          "facts_total": 2
+        },
+        {
+          "id": "d06",
+          "status": 200,
+          "refused": false,
+          "refusal_reason": null,
+          "citations": [
+            "a14c1d29-b4f2-434e-9223-c5089384e840:13",
+            "a14c1d29-b4f2-434e-9223-c5089384e840:14",
+            "a14c1d29-b4f2-434e-9223-c5089384e840:10",
+            "a14c1d29-b4f2-434e-9223-c5089384e840:12",
+            "a14c1d29-b4f2-434e-9223-c5089384e840:24",
+            "a14c1d29-b4f2-434e-9223-c5089384e840:23"
+          ],
+          "prompt_tokens": 2315,
+          "completion_tokens": 451,
+          "api_seconds": 4.029204632999608,
+          "wait_seconds": 0.0,
+          "calls": 1,
+          "facts_found": 2,
+          "facts_total": 2
+        },
+        {
+          "id": "d07",
+          "status": 200,
+          "refused": false,
+          "refusal_reason": null,
+          "citations": [
+            "a14c1d29-b4f2-434e-9223-c5089384e840:18"
+          ],
+          "prompt_tokens": 2526,
+          "completion_tokens": 107,
+          "api_seconds": 0.7896732770022936,
+          "wait_seconds": 0.0,
+          "calls": 1,
+          "facts_found": 2,
+          "facts_total": 3
+        },
+        {
+          "id": "d08",
+          "status": 200,
+          "refused": false,
+          "refusal_reason": null,
+          "citations": [
+            "a14c1d29-b4f2-434e-9223-c5089384e840:25",
+            "a14c1d29-b4f2-434e-9223-c5089384e840:26"
+          ],
+          "prompt_tokens": 2615,
+          "completion_tokens": 161,
+          "api_seconds": 2.404668652015971,
+          "wait_seconds": 13.856844590982655,
+          "calls": 1,
+          "facts_found": 2,
+          "facts_total": 2
+        },
+        {
+          "id": "d09",
+          "status": 200,
+          "refused": true,
+          "refusal_reason": "ungrounded",
+          "citations": [],
+          "prompt_tokens": 5850,
+          "completion_tokens": 184,
+          "api_seconds": 3.4719574709888548,
+          "wait_seconds": 0.0,
+          "calls": 2,
+          "facts_found": 0,
+          "facts_total": 2
+        },
+        {
+          "id": "d10",
+          "status": 503,
+          "refused": false,
+          "refusal_reason": null,
+          "citations": [],
+          "prompt_tokens": 0,
+          "completion_tokens": 0,
+          "api_seconds": null,
+          "wait_seconds": null,
+          "calls": 0,
+          "facts_found": 0,
+          "facts_total": 2
+        },
+        {
+          "id": "d11",
+          "status": 200,
+          "refused": true,
+          "refusal_reason": "ungrounded",
+          "citations": [],
+          "prompt_tokens": 4530,
+          "completion_tokens": 571,
+          "api_seconds": 5.088249523018021,
+          "wait_seconds": 39.235090399320086,
+          "calls": 2,
+          "facts_found": 0,
+          "facts_total": 2
+        },
+        {
+          "id": "d12",
+          "status": 200,
+          "refused": false,
+          "refusal_reason": null,
+          "citations": [
+            "a14c1d29-b4f2-434e-9223-c5089384e840:15",
+            "a14c1d29-b4f2-434e-9223-c5089384e840:9"
+          ],
+          "prompt_tokens": 2290,
+          "completion_tokens": 151,
+          "api_seconds": 2.2173795900016557,
+          "wait_seconds": 19.067753154349823,
+          "calls": 1,
+          "facts_found": 1,
+          "facts_total": 2
+        },
+        {
+          "id": "a01",
+          "status": 503,
+          "refused": false,
+          "refusal_reason": null,
+          "citations": [],
+          "prompt_tokens": 0,
+          "completion_tokens": 0,
+          "api_seconds": null,
+          "wait_seconds": null,
+          "calls": 0,
+          "abstained": false
+        },
+        {
+          "id": "a02",
+          "status": 503,
+          "refused": false,
+          "refusal_reason": null,
+          "citations": [],
+          "prompt_tokens": 0,
+          "completion_tokens": 0,
+          "api_seconds": null,
+          "wait_seconds": null,
+          "calls": 0,
+          "abstained": false
+        },
+        {
+          "id": "a03",
+          "status": 503,
+          "refused": false,
+          "refusal_reason": null,
+          "citations": [],
+          "prompt_tokens": 0,
+          "completion_tokens": 0,
+          "api_seconds": null,
+          "wait_seconds": null,
+          "calls": 0,
+          "abstained": false
+        },
+        {
+          "id": "a04",
+          "status": 503,
+          "refused": false,
+          "refusal_reason": null,
+          "citations": [],
+          "prompt_tokens": 0,
+          "completion_tokens": 0,
+          "api_seconds": null,
+          "wait_seconds": null,
+          "calls": 0,
+          "abstained": false
+        }
+      ],
+      "repairs": [
+        {
+          "questions": [
+            "d03",
+            "d04",
+            "d05",
+            "d06",
+            "d07",
+            "d08",
+            "d09",
+            "d10",
+            "d11",
+            "d12",
+            "a01",
+            "a02",
+            "a03",
+            "a04"
+          ],
+          "provider_requests": 4,
+          "reason": "transient provider 503s in the original run"
+        },
+        {
+          "questions": [
+            "d06",
+            "d07",
+            "d08",
+            "d09",
+            "d10",
+            "d11",
+            "a01",
+            "a02",
+            "a03",
+            "a04"
+          ],
+          "provider_requests": 5,
+          "reason": "transient provider 503s in the original run"
+        },
+        {
+          "questions": [
+            "d09",
+            "d10",
+            "a01",
+            "a02",
+            "a03",
+            "a04"
+          ],
+          "provider_requests": 2,
+          "reason": "transient provider 503s in the original run"
+        }
+      ]
+    }
+  },
+  "provider_requests": 27,
+  "config": {
+    "image": "docmind-service:p71",
+    "model": "openai/gpt-oss-120b",
+    "corpus": "attention (arXiv 1706.03762v7)",
+    "questions": "d01-d12 answerable (26 facts), a01-a04 absent; web out of scope",
+    "database": "local docmind_eval in the pgvector container"
+  }
+}
