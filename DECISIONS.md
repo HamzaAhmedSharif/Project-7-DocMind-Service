@@ -702,3 +702,75 @@ Notes are recorded in the milestone sections below.
   remediation's effect (or lack of it) is re-priced there; a further
   S1 attempt would need a new hypothesis and a new budget, not a
   re-run of these two runs.
+
+## P7.2 - quote-anchored repair and prompt p7-v3 (2026-11-10)
+
+### Pre-registration (written before any P7.2 provider run)
+
+- Context: P7.1 closed with S1 split (A2 22/26 gate met, B2 17/26 not
+  met) and a stop rule of no third round under P7.1. Hamza asked for
+  the system to be genuinely improved toward 26/26; Claude, as
+  planner, ruled 26/26 is not a plausible or honest target and Sol's
+  free diagnostic (below) verified the premise. Hamza approved this
+  plan on 2026-11-10 ("do what you think is the best"), with Sol
+  resolving the budget (see Budget) and filling the ruling's gaps
+  (test list, repair rounds, S2 handling) as manager clarifications
+  that change no gate.
+- Free diagnostic (zero provider calls, 2026-11-10, from the saved
+  A/B/A2/B2 records, the raw answers in `reports/service-eval-raw.json`,
+  the corpus chunks and the reference top-10): the groundable ceiling
+  is C = 23, recomputed independently of E3 and matching it - 23 of
+  the 26 key facts are present in the retrieved top-10 context. The 3
+  retrieval-absent facts are d02 "softmax over the scaled dot
+  products" and d02 "scaling by the square root of the key dimension"
+  (best bearing chunk 11, ranked 11th for d02 on both) and d09 "label
+  smoothing" (bearing chunk 27, ranked 18th for d09); recorded as
+  Project 9 evidence, retrieval is frozen here. Loss layers across
+  A2/B2: gate-lost zero (the P7.1 top-1 gate holds); validator-lost
+  d09 "residual dropout" in both runs (d09 refused `ungrounded` in
+  all four runs A/B/A2/B2) and both d11 facts in B2 (the repair retry
+  fired, 2 calls, and still failed); model-omitted at scorer level
+  d12's "positions cannot attend to subsequent positions" in both
+  runs (d12 scored 0, 1, 1, 1 across A/B/A2/B2) plus one fact each in
+  d03 and d07 in B2 only; not-measured d10 in B2 (provider 503). Two
+  scorer-level nuances are recorded, not fixed (the scorer and the
+  question set are frozen copies from Project 6): A2's d12 answer
+  states the masking content in a parenthetical phrasing the answer
+  regex cannot match, and A2's d02 "softmax" miss is the hyphenated
+  "soft-max". The famous-paper confound is proven at question level:
+  d02 has only 1 of its 3 facts in context yet scored 2/3 (A2) and
+  3/3 (B2), so retrieval-absent facts can be produced from model
+  memory and raw S1 can exceed the groundable ceiling.
+- Chosen: exactly two changes. (1) The citation-repair retry becomes
+  quote-anchored: the retry prompt requires the model to first quote
+  verbatim the exact chunk lines it will rely on (each quote followed
+  by its chunk id), then answer using only those quoted lines. This
+  targets the validator-lost facts (d09, d11); the retry still fires
+  once, only on an `ungrounded` refusal. (2) Prompt p7-v3 adds a
+  completeness instruction (answer every part of the question; cover
+  each item the context supports, citing each part), targeting the
+  model-omitted facts (d12; d03/d07 intermittently). The RULES
+  hardening text, context sanitization, retrieval, top_k, chunking,
+  the evidence threshold (0.35), every gate in `evaluation/gates.json`,
+  and the scorer/questions are unchanged; the held-out manifest is
+  untouched (Project 9).
+- Success criteria: the S1 gate (>= 22/26) must be met in BOTH runs
+  A3 and B3 (stricter than P7.1's split-verdict reading); the stretch
+  target is C = 23 groundable facts. Results are reported as raw
+  k/26 and as "k of C reachable", where groundable scored = raw S1
+  minus retrieval-absent facts scored (computed from the raw answers
+  with the frozen scorer and the E3 absent set). S2 >= 3/4 in each
+  run, measured as before; a stronger repair could flip absent
+  questions from abstention to fabrication, so S2 is watched, not
+  assumed. Because the prompt changed, R1 is re-checked on-arm: 15
+  attacks, 1 repeat (as in the P7.1 re-check), final hits <= 2.
+- Budget: at most 70 provider requests in total and at most 60 per
+  UTC day, successful-call counting (the ledger is the authority;
+  503 attempts do not count). A3 runs on UTC 2026-11-09, B3 and the
+  R1 re-check on UTC 2026-11-10. Only 503 casualties are re-run, at
+  most 5 repair rounds per run; a question still at 503 after the
+  repairs stands as not measured (the M8 run-C convention).
+- Stop rule: A3/B3 are recorded whatever they land. No A4/B4, no
+  P7.3. If the gate fails in either run, Project 7 closes with the
+  recorded numbers and the failure analysis; the LinkedIn post is
+  written from the final verified numbers only.
