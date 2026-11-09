@@ -8,6 +8,7 @@ from docmind_service.domain import RetrievedChunk
 from docmind_service.fakes import ScriptedLLM
 from docmind_service.guardrails import (
     BLOCKED_ANSWER,
+    COMPLETENESS,
     COUNTS,
     PROMPT_VERSION,
     RULES,
@@ -18,6 +19,7 @@ from docmind_service.guardrails import (
     validate_output,
 )
 from docmind_service.query import (
+    CITATION_REPAIR_SUFFIX,
     PROMPT_VERSION_V1,
     answer_question,
     build_prompt,
@@ -280,6 +282,37 @@ def test_citation_repair_recovers_a_grounded_answer():
     assert result.llm.calls == 2
 
 
+def test_quote_anchored_repair_suffix_is_used_on_the_retry():
+    # P7.2: the repair retry is quote-anchored - the model must quote the
+    # exact chunk lines verbatim before answering from those quotes.
+    assert "quote verbatim" in CITATION_REPAIR_SUFFIX
+    llm = ScriptedLLM(["a bare answer", '"some text" [c1]. The answer is some text [c1].'])
+    result = answer_question(
+        "Why?",
+        retriever=SpyRetriever([chunk(1)]),
+        llm=llm,
+        document_ids=None,
+        top_k=5,
+        guardrails_enabled=True,
+        canary="CANARY-XYZZY",
+        require_citation=True,
+    )
+    assert result.refused is False
+    assert len(llm.prompts) == 2
+    assert llm.prompts[1].endswith(CITATION_REPAIR_SUFFIX)
+    assert result.llm.calls == 2
+
+
+def test_prompt_v3_adds_completeness_and_keeps_the_rules_hardening():
+    # P7.2: prompt p7-v3 adds the completeness instruction; the RULES
+    # hardening text itself is unchanged and still leads the prompt.
+    prompt, _ = build_prompt_v2("Why?", [chunk(1)], "C")
+    assert PROMPT_VERSION == "p7-v3"
+    assert prompt.startswith(RULES)
+    assert COMPLETENESS in prompt
+    assert "Answer every part of the question" in prompt
+
+
 def test_citation_repair_never_fires_on_a_canary_block():
     llm = ScriptedLLM(["the code is CANARY-123 [c1]."])
     result = answer_question(
@@ -377,7 +410,7 @@ def test_validate_output_returns_citations_in_order():
 
 
 def test_prompt_version_is_p7_v2_and_the_off_arm_is_p7_v1():
-    assert PROMPT_VERSION == "p7-v2"
+    assert PROMPT_VERSION == "p7-v3"
     assert PROMPT_VERSION_V1 == "p7-v1"
 
 
@@ -407,7 +440,7 @@ def test_app_on_arm_uses_prompt_v2(make_client, log_records):
     assert "<<<c1" in llm.prompts[0]
     assert "Internal reference:" in llm.prompts[0]
     query_records = [record for record in log_records if record.name == "docmind.query"]
-    assert query_records[-1].prompt_version == "p7-v2"
+    assert query_records[-1].prompt_version == "p7-v3"
 
 
 def test_guardrails_counts_are_exported_for_the_report():
@@ -419,4 +452,4 @@ def test_guardrails_counts_are_exported_for_the_report():
         "urls_removed",
         "truncated",
     }
-    assert guardrails.PROMPT_VERSION == "p7-v2"
+    assert guardrails.PROMPT_VERSION == "p7-v3"

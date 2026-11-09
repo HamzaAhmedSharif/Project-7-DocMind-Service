@@ -4,7 +4,7 @@ from uuid import UUID
 from docmind_service.domain import LLMClient, LLMResult, RetrievedChunk, Retriever
 from docmind_service.guardrails import (
     PROMPT_VERSION,
-    build_prompt_v2,
+    build_prompt_v3,
     parse_citations,
     validate_output,
 )
@@ -23,14 +23,19 @@ __all__ = [
     "parse_citations",
 ]
 
-# Appended to the prompt for the single citation-repair retry (P7.1): the first
-# answer carried no valid citation, so the model is told to answer again from
-# the numbered chunks only and to cite them.
+# Appended to the prompt for the single citation-repair retry (P7.1; made
+# quote-anchored in P7.2): the first answer carried no valid citation, so the
+# model is told to answer again from the numbered chunks only, quoting the
+# exact lines it relies on before answering from those quotes. P7.1's plainer
+# suffix fired and still failed on d09/d11 in run B2; the quote-first form is
+# the P7.2 hypothesis for the validator-lost facts.
 CITATION_REPAIR_SUFFIX = (
     "\n\nYour previous answer did not cite the context chunks. Answer the question "
-    "again using only the chunks above, and cite the chunks you use by their ids in "
-    "square brackets, for example [c3]. If the chunks do not contain the answer, "
-    "say so clearly."
+    "again using only the chunks above. First quote verbatim the exact lines from "
+    "the chunks you will rely on, putting each quote in quotation marks followed "
+    'by its chunk id in square brackets, for example "..." [c3]. Then write '
+    "your answer using only those quoted lines, citing the same chunk ids. If the "
+    "chunks do not contain the answer, say so clearly."
 )
 
 PROMPT_VERSION_V1 = "p7-v1"
@@ -100,7 +105,7 @@ def answer_question(
         best_score = max((chunk.score for chunk in chunks), default=None)
         if best_score is None or best_score < evidence_min_score:
             return QueryResult(NO_EVIDENCE_ANSWER, [], True, "low_evidence", None, 0, 0)
-        prompt, mapping = build_prompt_v2(question, chunks, canary or "")
+        prompt, mapping = build_prompt_v3(question, chunks, canary or "")
         result = llm.complete(prompt)
         answer, cited, refused, reason, invalid = validate_output(
             result.text,

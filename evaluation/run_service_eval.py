@@ -47,6 +47,9 @@ RUN_CONFIGS = {
     # P7.1 remediation re-runs (post-hoc iteration; same configuration as A/B).
     "A2": {"guardrails": True},
     "B2": {"guardrails": True},
+    # P7.2 re-runs (post-hoc iteration; prompt p7-v3, quote-anchored repair).
+    "A3": {"guardrails": True, "prompt_version": "p7-v3"},
+    "B3": {"guardrails": True, "prompt_version": "p7-v3"},
 }
 
 
@@ -326,7 +329,8 @@ def run_once(name: str, key: str) -> tuple[dict, dict]:
     run_block = {
         "config": {
             "guardrails": config["guardrails"],
-            "prompt_version": "p7-v2" if config["guardrails"] else "p7-v1",
+            "prompt_version": config.get("prompt_version")
+            or ("p7-v2" if config["guardrails"] else "p7-v1"),
             "evidence_min_score": PAPER_THRESHOLD if config["guardrails"] else "guardrails-off",
             "require_citation": config["guardrails"],
             "cache_enabled": False,
