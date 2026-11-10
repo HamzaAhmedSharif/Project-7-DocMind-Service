@@ -280,6 +280,73 @@ not weaken injection resistance. Provider spend for P7.1: 42 recorded
 requests (A2 14, B2 13, R1 15) against the 100 cap; A2's 14 is a lower
 bound under the pre-fix accounting (see `DECISIONS.md`).
 
+## S1 remediation 2 (P7.2) — after remediation (post-hoc iteration, tuned on the evaluation questions)
+
+P7.2 tested whether the losses P7.1 left behind were still service
+losses. A free diagnostic (zero provider calls) came first: of the 26
+key facts, 23 are present in the retrieved top-10 context — the
+groundable ceiling C = 23, recomputed with the frozen scorer and
+matching E3. The three retrieval-absent facts are d02's softmax and
+scaling facts (their bearing chunk ranks 11th for d02) and d09's
+label smoothing (its only bearing chunk ranks 18th). Two changes
+were pre-registered in `DECISIONS.md` before any run: the
+citation-repair retry became quote-anchored (the retry must first
+quote the chunk lines it relies on, verbatim, with their ids, then
+answer citing the same ids), and the prompt moved to p7-v3, adding a
+completeness instruction while keeping the RULES hardening text
+byte-identical. Retrieval, thresholds, the scorer and the questions
+are unchanged. Success was pre-registered as S1 ≥ 22/26 in BOTH
+runs, reported raw and as "k of C reachable". Tuned on the same 12
+questions; held-out check is Project 9.
+
+Method. Runs A3 (2026-11-09) and B3 (2026-11-10) use image
+`docmind-service:p72` (commit `806954b`) and the same configuration,
+corpus and questions as A2/B2. Both first passes crossed the
+provider 503 wall (A3 measured 5 of 16 questions, B3 3 of 16) and
+took all five repair rounds; a03 and a04 were never measured in
+either run. R1 was re-checked last, on arm only, 1 repeat, because
+the prompt changed.
+
+| Gate | Threshold | Run A3 | Run B3 |
+|---|---|---|---|
+| S1 key facts | ≥ 22 / 26 in both runs | 20 / 26 (19 of 23 groundable) | 21 / 26 (19 of 23 groundable) |
+| S2 abstentions | ≥ 3 / 4 | 2 / 4 (a03, a04 unmeasurable) | 2 / 4 (a03, a04 unmeasurable) |
+| S3a valid citations | ≥ 0.95 | 1.000 | 1.000 |
+| S3b answers with citation | ≥ 0.90 | 0.857 | 0.857 |
+| S4 citation supports fact | ≥ 0.75 target | 0.818 | 0.909 |
+| S5 mean prompt tokens | ≤ 3200 | 2388.5 | 2171.5 |
+
+Per-question, A3 vs B3 (facts found / total): d01 2/2, 2/2; d02 2/3,
+3/3; d03 1/2, 1/2; d04 2/2, 2/2; d05 2/2, 2/2; d06 2/2, 2/2; d07 2/3,
+2/3; d08 2/2, 2/2; d09 0/2, 0/2 — answered in both runs (A3 via the
+repair retry, B3 on the first pass) with a verbatim quote of the
+regularization passage and an explicit statement that the excerpts
+do not enumerate the techniques; d10 2/2, 2/2; d11 2/2, 2/2; d12
+1/2, 1/2. No document question was refused in either run.
+
+What the two runs say together. The pre-registered gate is not met
+(20 and 21 against ≥ 22 in both), and the honest frame is the
+groundable one: both runs found exactly 19 of the 23 facts present
+in their context. The single raw difference is d02's softmax fact —
+missed in A3 on a hyphenated "soft-max" the frozen scorer regex
+cannot match, scored in B3 from partial evidence (the
+model-memory confound the diagnostic proved on this question). The
+four groundable losses are identical in both runs and none of them
+is a service-stack refusal: d09's residual-dropout fact is a
+retrieval-rank loss (the enumeration chunk ranks 18th); d03 and d12
+are scorer-phrasing losses (the answers state the content in words
+the frozen regexes do not match); d07's sinusoid fact is a genuine
+omission the completeness instruction did not recover. Where
+A2–B2 differed by 5 facts on identical code, A3–B3 differ by 1 —
+the remaining losses are systematic, and the lever that addresses
+the largest of them (retrieval rank) is Project 9's variable, not
+another P7 iteration. S2 held under the stronger repair: a01 and
+a02 abstained in both runs, each after the repair retry fired.
+R1 re-check (on arm, 1 repeat): 0/15 attacks succeeded, model
+resisted 15/15 — the p7-v3 prompt did not weaken injection
+resistance. Provider spend for P7.2: 48 recorded requests (A3 17,
+B3 16, R1 15) against the 70 cap.
+
 ### Project 6 vs Project 7 on the same questions
 
 | | P6 baseline (single) | P6 single call | P6 multi-agent | P7 run A | P7 run B |

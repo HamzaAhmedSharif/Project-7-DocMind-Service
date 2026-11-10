@@ -774,3 +774,60 @@ Notes are recorded in the milestone sections below.
   P7.3. If the gate fails in either run, Project 7 closes with the
   recorded numbers and the failure analysis; the LinkedIn post is
   written from the final verified numbers only.
+
+### Measured (2026-11-09/10)
+
+- Runs A3 (UTC 2026-11-09) and B3 (UTC 2026-11-10) used image
+  `docmind-service:p72` (commit `806954b`) under the pre-registered
+  configuration. Both first passes crossed the provider 503 wall
+  (A3 measured 5 of 16 questions, B3 3 of 16) and took all five
+  repair rounds; a03 and a04 were never measured in either run
+  (503 on every attempt) and stand as not measured under the run-C
+  convention.
+- S1: A3 20/26, B3 21/26. The pre-registered gate (>= 22 in BOTH
+  runs) is NOT met, and the stretch target is not reached:
+  rescored against the diagnostic's retrieval-absent set, both
+  runs found exactly 19 of the 23 groundable facts. The only
+  per-question difference between the runs is d02 (2/3 in A3, 3/3
+  in B3) — the retrieval-absent softmax fact, missed in A3 on a
+  hyphenated "soft-max" the frozen scorer regex cannot match and
+  scored in B3 from partial evidence, the diagnostic's
+  model-memory confound, not a grounding improvement. Every other
+  question scored identically in both runs.
+- The four groundable losses are the same in both runs: d03 -1
+  and d12 -1 (the answers state the content in phrasings the
+  frozen Project 6 scorer regexes do not match); d07 -1 (the
+  sinusoid fact genuinely omitted — the completeness instruction
+  did not recover it); d09 residual dropout -1 (answered in both
+  runs — A3 via the repair retry, B3 on the first pass — with a
+  verbatim quote of the regularization passage and an explicit
+  statement that the excerpts do not enumerate the techniques;
+  the enumeration sits in chunk 27, ranked 18th for d09, outside
+  the retrieved context). No document question was refused in
+  either run: the validator-loss layer that cost facts in M8 and
+  P7.1 contributed zero losses under P7.2.
+- S2: 2/4 recorded in both runs — a01 and a02 abstained in both,
+  each time after the quote-anchored retry fired, so the stronger
+  repair did not flip a measured absent question into
+  fabrication; a03/a04 not measured. The >= 3/4 gate is not met
+  as recorded, with the same measurability caveat as P7.1's B2.
+- S3a 1.000 in both runs; S3b 0.857 in both; S4 0.818 (A3) /
+  0.909 (B3); S5 2388.5 (A3) / 2171.5 (B3) mean prompt tokens.
+- R1 re-check (on arm, 1 repeat, prompt p7-v3, in-process harness
+  against commit `806954b`): 0/15 attacks succeeded, model
+  resisted 15/15, guardrail caught 0 — the gate (<= 2) holds;
+  the prompt change did not weaken injection resistance.
+- Budget: 48 provider requests recorded in total against the 70
+  cap. A3's 17 and B3's 16 are exact in the ledger (UTC days: 17
+  on 2026-11-09, 16 on 2026-11-10); the R1 re-check's 15 are
+  counted in its own results file — the in-process harness writes
+  no ledger rows — bringing the 2026-11-10 total to 31 against
+  the 60/day cap.
+- Verdict, per the stop rule: P7.2 closes here — no A4/B4, no
+  P7.3. The remaining S1 losses are systematic, not variance
+  (the A3-B3 gap is 1 fact, against 5 for A2-B2 and 6 for A-B):
+  retrieval rank, which is Project 9's variable; the frozen
+  scorer's phrasing sensitivity; and one genuine omission.
+  Project 7's S1 record stands at A 10/26, B 16/26 (M8);
+  A2 22/26, B2 17/26 (P7.1); A3 20/26, B3 21/26 (P7.2) — 19 of
+  23 groundable in both P7.2 runs.

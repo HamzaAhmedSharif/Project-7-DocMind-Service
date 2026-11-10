@@ -174,6 +174,21 @@ Tuned on the same 12 questions; held-out check is Project 9. Full
 numbers and the per-question record: `docs/EVALUATION.md`,
 `DECISIONS.md`.
 
+Remediation 2 (P7.2, 2026-11-09/10): the citation-repair retry was
+made quote-anchored (quote the chunk lines verbatim first, then
+answer citing them) and the prompt moved to p7-v3 with a
+completeness instruction. A pre-run diagnostic fixed the honest
+target: 23 of the 26 key facts are present in the retrieved
+context. Measured after remediation (post-hoc iteration, tuned on
+the evaluation questions): run A3 20/26 and run B3 21/26 — below
+the ≥22 gate in both runs, and exactly 19 of the 23 reachable
+facts in both runs; no document question was refused in either
+run, and the remaining losses are retrieval rank, frozen-scorer
+phrasing, and one omission. The red-team re-check held at 0/15
+with guardrails on. Tuned on the same 12 questions; held-out
+check is Project 9. Full numbers and the per-question record:
+`docs/EVALUATION.md`, `DECISIONS.md`.
+
 ## Quick start
 
 Prerequisites: Docker, and Python 3.12 for the local checks.
