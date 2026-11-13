@@ -4,7 +4,7 @@ import time
 from contextlib import asynccontextmanager
 from pathlib import Path
 from typing import Annotated
-from uuid import UUID
+from uuid import UUID, uuid4
 
 import numpy as np
 from fastapi import APIRouter, Depends, FastAPI, File, Request, Response, UploadFile
@@ -30,6 +30,7 @@ from docmind_service.domain import (
     ProviderError,
     QuotaExceeded,
     RetrievalError,
+    RetrievedChunk,
     Retriever,
 )
 from docmind_service.embedding import OnnxEmbedder
@@ -67,6 +68,7 @@ from docmind_service.ratelimit import (
     SlidingWindowLimiter,
     client_ip,
 )
+from docmind_service.rerank import OnnxCrossEncoderReranker
 from docmind_service.schemas import (
     Citation,
     DocumentList,
@@ -161,6 +163,8 @@ def _scope(state, body: QueryIn, top_k: int) -> str:
         guardrails_enabled=settings.guardrails_enabled,
         evidence_min_score=evidence,
         require_citation=settings.require_citation,
+        reranker_model=settings.reranker_model if settings.reranker_enabled else None,
+        rerank_candidates=settings.rerank_candidates if settings.reranker_enabled else None,
     )
 
 
@@ -563,7 +567,16 @@ def create_app(
         pool = make_pool(dsn)
         if embedder is None:
             embedder = OnnxEmbedder(settings.embedding_model, cache_dir=settings.model_cache_dir)
-        store = PgStore(pool, embedder)
+        reranker = None
+        if settings.reranker_enabled:
+            # Fail fast at startup when the model is missing: the image bakes
+            # it in, so a missing model means a broken build, not a fallback.
+            reranker = OnnxCrossEncoderReranker(
+                settings.reranker_model, cache_dir=settings.model_cache_dir
+            )
+        store = PgStore(
+            pool, embedder, reranker=reranker, rerank_candidates=settings.rerank_candidates
+        )
     if retriever is None:
         retriever = (
             store if store is not None and hasattr(store, "retrieve") else InMemoryRetriever()
@@ -604,6 +617,9 @@ def create_app(
             warm_up = getattr(embedder, "warm_up", None)
             if warm_up is not None:
                 warm_up()
+            reranker = getattr(retriever, "reranker", None)
+            if reranker is not None:
+                reranker.warm_up()
             yield
         finally:
             if pool is not None:
@@ -622,6 +638,7 @@ def create_app(
     app.state.store = store
     app.state.embedder = embedder
     app.state.retriever = retriever
+    app.state.reranker = getattr(retriever, "reranker", None)
     app.state.llm = llm
     app.state.anonymous_llm = anonymous_llm
     app.state.global_cap = global_cap
@@ -674,13 +691,19 @@ def create_app(
         if demo:
             body = ReadyOut(
                 status="ready",
-                checks={"database": "demo", "embedder": "demo", "provider": "demo"},
+                checks={
+                    "database": "demo",
+                    "embedder": "demo",
+                    "provider": "demo",
+                    "reranker": "demo",
+                },
             )
             return JSONResponse(body.model_dump(), status_code=200)
         checks = {
             "database": "not_configured",
             "embedder": "not_configured",
             "provider": provider_status,
+            "reranker": "disabled",
         }
         if store is not None:
             try:
@@ -696,6 +719,26 @@ def create_app(
                 checks["embedder"] = "ok" if len(vector) == embedder.dim else "DimensionMismatch"
             except Exception as exc:
                 checks["embedder"] = type(exc).__name__
+        reranker = getattr(retriever, "reranker", None)
+        if reranker is not None:
+            try:
+                probe = reranker.rerank(
+                    "readiness",
+                    [
+                        RetrievedChunk(
+                            chunk_id="readyz",
+                            document_id=uuid4(),
+                            page=0,
+                            text="readiness",
+                            score=0.0,
+                        )
+                    ],
+                )
+                checks["reranker"] = "ok" if len(probe) == 1 else "bad_result"
+            except Exception as exc:
+                checks["reranker"] = type(exc).__name__
+        # The reranker is non-gating: retrieval degrades to dense order when
+        # it fails, so the service stays ready without it.
         ready = checks["database"] == "ok" and checks["embedder"] == "ok"
         body = ReadyOut(status="ready" if ready else "not_ready", checks=checks)
         return JSONResponse(body.model_dump(), status_code=200 if ready else 503)

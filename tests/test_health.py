@@ -27,5 +27,5 @@ def test_readyz_is_demo_ready_without_a_database():
     body = response.json()
     assert body == {
         "status": "ready",
-        "checks": {"database": "demo", "embedder": "demo", "provider": "demo"},
+        "checks": {"database": "demo", "embedder": "demo", "provider": "demo", "reranker": "demo"},
     }

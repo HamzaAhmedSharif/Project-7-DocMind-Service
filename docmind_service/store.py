@@ -14,6 +14,7 @@ from docmind_service.domain import (
     RetrievedChunk,
 )
 from docmind_service.metrics import DB_ERRORS
+from docmind_service.rerank import rerank_with_fallback
 
 
 def _vector(values) -> str:
@@ -24,10 +25,18 @@ def _vector(values) -> str:
 class PgStore:
     """Postgres + pgvector store; also implements the Retriever interface."""
 
-    def __init__(self, pool: ConnectionPool, embedder: Embedder):
+    def __init__(
+        self,
+        pool: ConnectionPool,
+        embedder: Embedder,
+        reranker=None,
+        rerank_candidates: int = 25,
+    ):
         self.pool = pool
         self.embedder = embedder
         self.dim = embedder.dim
+        self.reranker = reranker
+        self.rerank_candidates = rerank_candidates
 
     def ping(self) -> None:
         with self.pool.connection(timeout=3) as conn:
@@ -194,6 +203,9 @@ class PgStore:
             raise ValueError(f"query embedding shape {vector.shape}, expected ({self.dim},)")
         if top_k < 1:
             raise ValueError("top_k must be positive")
+        # P7.3: with a reranker, fetch N dense candidates and rerank down to
+        # top_k. The SQL LIMIT is never below top_k.
+        limit = max(top_k, self.rerank_candidates) if self.reranker is not None else top_k
         literal = _vector(vector)
         docs = document_ids if document_ids else None
         query = (
@@ -205,12 +217,12 @@ class PgStore:
         try:
             with self.pool.connection() as conn:
                 rows = conn.execute(
-                    query, {"q": literal, "tenant": tenant_id, "docs": docs, "k": top_k}
+                    query, {"q": literal, "tenant": tenant_id, "docs": docs, "k": limit}
                 ).fetchall()
         except (psycopg.Error, PoolTimeout) as exc:
             DB_ERRORS.inc()
             raise RetrievalError("retrieval backend unavailable") from exc
-        return [
+        chunks = [
             RetrievedChunk(
                 chunk_id=row[0],
                 document_id=row[1],
@@ -220,3 +232,6 @@ class PgStore:
             )
             for row in rows
         ]
+        if self.reranker is not None:
+            return rerank_with_fallback(self.reranker, question, chunks)[:top_k]
+        return chunks

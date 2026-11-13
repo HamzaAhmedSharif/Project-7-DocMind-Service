@@ -76,6 +76,7 @@ jobs:
         with:
           path: data/cache
           key: corpus-${{ hashFiles('evaluation/corpus.json') }}
+      - run: python scripts/fetch_reranker.py --model Xenova/ms-marco-MiniLM-L-6-v2 --out "${{ runner.temp }}/models"
       - run: python scripts/fetch_corpus.py --manifest evaluation/corpus.json --out data/cache
       - run: python -m pytest -q -m "integration or model"
         env: {DOCMIND_MODEL_CACHE_DIR: "${{ runner.temp }}/models"}
@@ -119,6 +120,11 @@ jobs:
     needs: [lint, unit]
     steps:
       - uses: actions/checkout@11d5960a326750d5838078e36cf38b85af677262 # v4
+      - uses: actions/cache@0057852bfaa89a56745cba8c7296529d2fc39830 # v4
+        with:
+          path: models
+          key: reranker-${{ hashFiles('scripts/fetch_reranker.py') }}
+      - run: python3 scripts/fetch_reranker.py --model Xenova/ms-marco-MiniLM-L-6-v2 --out models
       - run: docker build -t docmind-service:ci .
       - name: "Trivy (blocking: CRITICAL with a fix available)"
         run: docker run --rm -v /var/run/docker.sock:/var/run/docker.sock aquasec/trivy:0.76.0 image --severity CRITICAL --ignore-unfixed --exit-code 1 --no-progress docmind-service:ci
@@ -149,6 +155,11 @@ jobs:
       - uses: actions/checkout@11d5960a326750d5838078e36cf38b85af677262 # v4
       - uses: docker/login-action@c94ce9fb468520275223c153574b00df6fe4bcc9 # v3
         with: {registry: ghcr.io, username: "${{ github.actor }}", password: "${{ secrets.GITHUB_TOKEN }}"}
+      - uses: actions/cache@0057852bfaa89a56745cba8c7296529d2fc39830 # v4
+        with:
+          path: models
+          key: reranker-${{ hashFiles('scripts/fetch_reranker.py') }}
+      - run: python3 scripts/fetch_reranker.py --model Xenova/ms-marco-MiniLM-L-6-v2 --out models
       - run: |
           IMAGE=ghcr.io/$(echo "${{ github.repository_owner }}" | tr 'A-Z' 'a-z')/docmind-service
           docker build --build-arg GIT_SHA=${GITHUB_SHA} --label org.opencontainers.image.revision=${GITHUB_SHA} --label org.opencontainers.image.source=https://github.com/${{ github.repository }} -t "$IMAGE:sha-${GITHUB_SHA::7}" -t "$IMAGE:latest" .

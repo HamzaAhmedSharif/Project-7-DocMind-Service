@@ -34,6 +34,9 @@ class Settings(BaseSettings):
 
     embedding_model: str = "sentence-transformers/all-MiniLM-L6-v2"
     model_cache_dir: str | None = None
+    reranker_enabled: bool = True
+    reranker_model: str = "Xenova/ms-marco-MiniLM-L-6-v2"
+    rerank_candidates: int = Field(default=25, ge=1, le=100)
     git_sha: str | None = None
     uploads_enabled: bool = True
     demo_daily_cap: int = 300

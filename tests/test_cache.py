@@ -13,6 +13,8 @@ BASE = dict(
     guardrails_enabled=True,
     evidence_min_score=0.2,
     require_citation=True,
+    reranker_model="Xenova/ms-marco-MiniLM-L-6-v2",
+    rerank_candidates=25,
 )
 
 
@@ -36,6 +38,9 @@ def test_scope_hash_is_stable_and_changes_with_every_input():
         {**BASE, "guardrails_enabled": False},
         {**BASE, "evidence_min_score": 0.3},
         {**BASE, "require_citation": False},
+        {**BASE, "reranker_model": "other-model"},
+        {**BASE, "rerank_candidates": 12},
+        {**BASE, "reranker_model": None, "rerank_candidates": None},
     ]
     for variant in variants:
         assert scope_hash(**variant) != baseline

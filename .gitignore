@@ -20,3 +20,5 @@ reports/
 smoke.json
 mem.txt
 evaluation/corpus/
+# P7.3 reranker model files (fetched by scripts/fetch_reranker.py; never committed).
+models/

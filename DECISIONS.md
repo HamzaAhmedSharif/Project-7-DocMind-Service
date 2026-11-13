@@ -970,3 +970,73 @@ Notes are recorded in the milestone sections below.
   fitted values, and is conservative because the harness S5
   denominator also includes non-refused absent rows (503s at 0
   tokens lower it).
+
+### Implementation (2026-11-13)
+
+- Design P as pre-registered. New module
+  `docmind_service/rerank.py`: a `Reranker` protocol,
+  `OnnxCrossEncoderReranker` (onnxruntime + tokenizers
+  directly — the ruling's pre-authorised fallback branch,
+  because pinned fastembed 0.9.1 has no `TextCrossEncoder`),
+  `NoopReranker`, `FakeReranker`, and
+  `rerank_with_fallback` (graceful degradation to dense
+  order; only the exception type is logged; a length change
+  counts as failure). The adapter mirrors the design-check
+  `CrossEncoder` exactly (default ORT session options,
+  512-token truncation, pad id 0, scores = logits[:, 0],
+  stable sort so ties keep dense order).
+- `PgStore.retrieve` and `InMemoryRetriever.retrieve` take
+  `reranker` / `rerank_candidates` kwargs (defaults keep the
+  old behaviour). With a reranker set, the dense stage
+  returns max(top_k, N) candidates and the reranked top_k is
+  returned; chunk scores stay the dense cosine, so the
+  evidence gate (a dense top-1 test) and the citation
+  contract are unchanged.
+- Settings (DOCMIND_ prefix): `RERANKER_ENABLED` (default
+  true), `RERANKER_MODEL` (default
+  `Xenova/ms-marco-MiniLM-L-6-v2`), `RERANK_CANDIDATES`
+  (default 25, range 1-100). `create_app` auto-constructs
+  the reranker only in the non-demo path where it builds the
+  store, and fails fast at startup if the model is missing
+  (a missing model is a broken build, not a fallback).
+  Provided stores and retrievers are untouched.
+- `/readyz` gains a `reranker` check (`ok` via a live 1-pair
+  probe, `disabled`, or the exception type name); it is
+  reported but non-gating — readiness stays database +
+  embedder. `ReadyOut.checks` is a free-form dict, so the
+  OpenAPI schema is unchanged (verified:
+  `scripts/export_openapi.py` produces no diff).
+- Metrics: `docmind_rerank_seconds` histogram and
+  `docmind_rerank_total{result=ok|fallback}` counter. The
+  semantic-cache scope includes the reranker model and
+  candidate count.
+- `evaluation/run_retrieval.py`: E2 stays on the dense stage;
+  E3 is measured on the FINAL (reranked) context; the result
+  adds `e2_reranked` (ungated overlap of the final context),
+  `e3_context`, reranker metadata, and latency for both
+  paths. `check_gates.py` is unchanged (it reads the same
+  metric keys).
+- Model acquisition: `scripts/fetch_reranker.py`
+  (stdlib-only, so CI jobs without a Python environment can
+  run it with system python3) downloads the four model files
+  from the Hub with sha256 verification. The model is NOT
+  vendored in git (`models/` is gitignored); the Dockerfile
+  COPYs it from the build context into `/opt/models`, and CI
+  fetches it (cached) in the retrieval-eval, image, and
+  release jobs.
+- Verification: ruff check + format clean; unit suite 301
+  passed, 0 failed (286 at P7.2 close + 15 new reranker
+  tests), 20 deselected; integration suite 17 passed, 0
+  failed (incl. the new PgStore rerank test against the
+  local pgvector container); the three initially failing
+  tests asserted the old exact shapes (readyz checks,
+  release.env key list) and were updated to the new intended
+  shapes — no service behaviour was changed to satisfy a
+  test.
+- End-to-end retrieval check (local, free, 0 provider calls):
+  `evaluation/run_retrieval.py` against the local pgvector
+  container with the real reranker: E1 1.000, E2 1.000 (dense
+  stage, per-question min 1.000), E3 26/26 on the final
+  reranked context (missed: none) — the design-check ceiling
+  C'=26 confirmed through the shipped service path.
+  E2_reranked 0.685 (ungated, informational).

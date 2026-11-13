@@ -6,6 +6,11 @@ COPY requirements.lock .
 RUN pip install -r requirements.lock
 ARG HF_ENDPOINT
 RUN python -c "from fastembed import TextEmbedding; TextEmbedding('sentence-transformers/all-MiniLM-L6-v2', cache_dir='/opt/models')"
+# P7.3: the cross-encoder reranker model is copied from the build context
+# (models/<model-id>/...), never downloaded at build time; fetch it first
+# with `python scripts/fetch_reranker.py --model <id> --out models`.
+# The directory is gitignored; see docs/OPERATIONS.md.
+COPY models/ /opt/models/
 ARG GIT_SHA=
 ENV DOCMIND_GIT_SHA=$GIT_SHA
 COPY docmind_service ./docmind_service

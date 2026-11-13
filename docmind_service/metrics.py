@@ -43,6 +43,8 @@ GUARDRAIL = Counter("docmind_guardrail_total", "Guardrail events", ["kind"], reg
 CACHE = Counter("docmind_cache_total", "Cache results", ["result"], registry=REGISTRY)
 RETRIEVAL = Histogram("docmind_retrieval_seconds", "Retrieval time", registry=REGISTRY)
 EMBED = Histogram("docmind_embed_seconds", "Embedding time", registry=REGISTRY)
+RERANK_SECONDS = Histogram("docmind_rerank_seconds", "Cross-encoder rerank time", registry=REGISTRY)
+RERANK_TOTAL = Counter("docmind_rerank_total", "Rerank results", ["result"], registry=REGISTRY)
 DB_POOL = Gauge("docmind_db_pool", "Database pool state", ["state"], registry=REGISTRY)
 DB_ERRORS = Counter("docmind_db_errors_total", "Database errors", registry=REGISTRY)
 BUILD_INFO = Gauge(

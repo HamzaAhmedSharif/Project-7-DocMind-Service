@@ -4,6 +4,7 @@ from datetime import UTC, datetime
 from uuid import UUID, uuid4
 
 from docmind_service.domain import DocumentRecord, LLMResult, QuotaExceeded, RetrievedChunk
+from docmind_service.rerank import rerank_with_fallback
 
 DEMO_DOCUMENT_ID = UUID("00000000-0000-4000-8000-000000000001")
 
@@ -54,8 +55,16 @@ def demo_chunks() -> list[RetrievedChunk]:
 class InMemoryRetriever:
     """Deterministic keyword-overlap retriever for tests, demos and CI smoke tests."""
 
-    def __init__(self, chunks: list[RetrievedChunk] | None = None) -> None:
+    def __init__(
+        self,
+        chunks: list[RetrievedChunk] | None = None,
+        *,
+        reranker=None,
+        rerank_candidates: int = 25,
+    ) -> None:
         self.chunks = chunks if chunks is not None else demo_chunks()
+        self.reranker = reranker
+        self.rerank_candidates = rerank_candidates
 
     def retrieve(
         self,
@@ -85,7 +94,10 @@ class InMemoryRetriever:
                     )
                 )
         scored.sort(key=lambda c: (-c.score, c.chunk_id))
-        return scored[:top_k]
+        if self.reranker is None:
+            return scored[:top_k]
+        candidates = scored[: max(top_k, self.rerank_candidates)]
+        return rerank_with_fallback(self.reranker, question, candidates)[:top_k]
 
 
 class InMemoryDocumentStore:

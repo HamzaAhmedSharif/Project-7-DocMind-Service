@@ -34,6 +34,8 @@ def scope_hash(
     guardrails_enabled: bool,
     evidence_min_score: float,
     require_citation: bool,
+    reranker_model: str | None = None,
+    rerank_candidates: int | None = None,
 ) -> str:
     payload = {
         "document_ids": sorted(str(item) for item in document_ids) if document_ids else None,
@@ -44,6 +46,8 @@ def scope_hash(
         "guardrails_enabled": guardrails_enabled,
         "evidence_min_score": round(float(evidence_min_score), 6),
         "require_citation": require_citation,
+        "reranker_model": reranker_model,
+        "rerank_candidates": rerank_candidates,
     }
     encoded = json.dumps(payload, sort_keys=True, separators=(",", ":")).encode("utf-8")
     return hashlib.sha256(encoded).hexdigest()

@@ -27,4 +27,7 @@ def test_release_env_is_non_secret_and_has_the_expected_keys():
         "DOCMIND_CACHE_ENABLED",
         "DOCMIND_CACHE_THRESHOLD",
         "DOCMIND_REQUIRE_CITATION",
+        "DOCMIND_RERANKER_ENABLED",
+        "DOCMIND_RERANKER_MODEL",
+        "DOCMIND_RERANK_CANDIDATES",
     ]

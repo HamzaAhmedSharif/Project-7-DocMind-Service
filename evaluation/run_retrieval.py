@@ -16,6 +16,7 @@ from docmind_service.config import get_settings
 from docmind_service.db import make_pool, migrate
 from docmind_service.embedding import OnnxEmbedder
 from docmind_service.ingest import extract_pages
+from docmind_service.rerank import OnnxCrossEncoderReranker
 from docmind_service.store import PgStore
 from evaluation.questions import QUESTIONS
 from evaluation.scoring import score_key_facts
@@ -79,7 +80,8 @@ def main(argv: list[str] | None = None) -> int:
         raise SystemExit("DOCMIND_TEST_DATABASE_URL is not set")
     if not dsn.rsplit("/", 1)[-1].split("?", 1)[0].endswith("_test"):
         raise SystemExit("DOCMIND_TEST_DATABASE_URL must name a database ending in _test")
-    top_k = get_settings().default_top_k
+    settings = get_settings()
+    top_k = settings.default_top_k
 
     manifest = json.loads(MANIFEST.read_text(encoding="utf-8"))
     corpus = manifest["corpora"][0]
@@ -100,6 +102,19 @@ def main(argv: list[str] | None = None) -> int:
     pool.open(wait=True)
     embedder = OnnxEmbedder(cache_dir=os.environ.get("DOCMIND_MODEL_CACHE_DIR"))
     store = PgStore(pool, embedder)
+    # P7.3: E2 is measured on the dense stage, E3 on the final (reranked)
+    # context. The reranked store shares the pool and embedder.
+    reranked_store = None
+    if settings.reranker_enabled:
+        reranker = OnnxCrossEncoderReranker(
+            settings.reranker_model, cache_dir=os.environ.get("DOCMIND_MODEL_CACHE_DIR")
+        )
+        reranked_store = PgStore(
+            pool,
+            embedder,
+            reranker=reranker,
+            rerank_candidates=settings.rerank_candidates,
+        )
     try:
         with pool.connection() as conn:
             conn.execute("DELETE FROM documents WHERE tenant_id = %s", ("eval",))
@@ -130,6 +145,7 @@ def main(argv: list[str] | None = None) -> int:
 
         top10 = json.loads((FIXTURES / "reference_top10.json").read_text(encoding="utf-8"))
         e2 = {}
+        e2_reranked = {}
         e3 = {"found": 0, "total": 0, "missed": []}
         for question in QUESTIONS:
             embedder.clear_cache()
@@ -141,8 +157,23 @@ def main(argv: list[str] | None = None) -> int:
             )
             ordinals = [int(hit.chunk_id.rsplit(":", 1)[1]) for hit in hits]
             e2[question["id"]] = len(set(ordinals) & set(top10[question["id"]])) / 10
+            # E3 is measured on the FINAL context: the reranked top-10 when
+            # the reranker is enabled, else the dense top-10.
+            final_hits = hits
+            if reranked_store is not None:
+                embedder.clear_cache()
+                final_hits = reranked_store.retrieve(
+                    question["question"],
+                    tenant_id="eval",
+                    document_ids=None,
+                    top_k=top_k,
+                )
+                reranked_ordinals = [int(hit.chunk_id.rsplit(":", 1)[1]) for hit in final_hits]
+                e2_reranked[question["id"]] = (
+                    len(set(reranked_ordinals) & set(top10[question["id"]])) / 10
+                )
             if question["type"] == "doc":
-                context = "\n".join(hit.text for hit in hits)
+                context = "\n".join(hit.text for hit in final_hits)
                 scored = score_key_facts(context, question["key_facts"])
                 e3["found"] += scored["found"]
                 e3["total"] += scored["total"]
@@ -167,6 +198,25 @@ def main(argv: list[str] | None = None) -> int:
             "p50_seconds": float(np.percentile(latencies, 50)),
             "p95_seconds": float(np.percentile(latencies, 95)),
         }
+        latency_reranked = None
+        if reranked_store is not None:
+            reranked_latencies = []
+            for _ in range(5):
+                for question in QUESTIONS:
+                    embedder.clear_cache()
+                    started = time.perf_counter()
+                    reranked_store.retrieve(
+                        question["question"],
+                        tenant_id="eval",
+                        document_ids=None,
+                        top_k=top_k,
+                    )
+                    reranked_latencies.append(time.perf_counter() - started)
+            latency_reranked = {
+                "samples": len(reranked_latencies),
+                "p50_seconds": float(np.percentile(reranked_latencies, 50)),
+                "p95_seconds": float(np.percentile(reranked_latencies, 95)),
+            }
         metadata = _metadata(pool)
         result = {
             "label": args.label,
@@ -187,8 +237,23 @@ def main(argv: list[str] | None = None) -> int:
                 "mean_top10_overlap": float(np.mean(list(e2.values()))),
                 "per_question": e2,
             },
+            "e2_reranked": (
+                {
+                    "mean_top10_overlap": float(np.mean(list(e2_reranked.values()))),
+                    "per_question": e2_reranked,
+                }
+                if e2_reranked
+                else None
+            ),
             "e3": e3,
+            "e3_context": "reranked" if reranked_store is not None else "dense",
+            "reranker": {
+                "enabled": reranked_store is not None,
+                "model": settings.reranker_model if reranked_store is not None else None,
+                "candidates": settings.rerank_candidates if reranked_store is not None else None,
+            },
             "latency": latency,
+            "latency_reranked": latency_reranked,
             "metadata": metadata,
             "metrics": {
                 "e1_min_cosine": float(all_cos.min()),
@@ -200,11 +265,14 @@ def main(argv: list[str] | None = None) -> int:
         out = Path(args.out)
         out.parent.mkdir(parents=True, exist_ok=True)
         out.write_text(json.dumps(result, indent=2) + "\n", encoding="utf-8")
-        print(
+        summary = (
             f"E1 min={result['e1']['min_cosine']:.6f} mean={result['e1']['mean_cosine']:.6f} "
             f"E2={result['e2']['mean_top10_overlap']:.3f} "
-            f"E3={e3['found']}/{e3['total']} chunks={len(chunks)}"
+            f"E3={e3['found']}/{e3['total']} ({result['e3_context']}) chunks={len(chunks)}"
         )
+        if result["e2_reranked"]:
+            summary += f" E2reranked={result['e2_reranked']['mean_top10_overlap']:.3f}"
+        print(summary)
     finally:
         pool.close()
     return 0

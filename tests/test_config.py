@@ -14,6 +14,9 @@ def test_defaults():
     assert settings.hosted_rpm == 20
     assert settings.hosted_tpm == 8000
     assert settings.embedding_model == "sentence-transformers/all-MiniLM-L6-v2"
+    assert settings.reranker_enabled is True
+    assert settings.reranker_model == "Xenova/ms-marco-MiniLM-L-6-v2"
+    assert settings.rerank_candidates == 25
 
 
 def test_environment_overrides(monkeypatch):

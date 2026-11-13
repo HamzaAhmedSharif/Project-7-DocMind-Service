@@ -95,7 +95,7 @@ process). Public surface:
 |---|---|---|
 | `GET /` | none | Landing page |
 | `GET /healthz` | none | Liveness; never touches the database |
-| `GET /readyz` | none | Readiness; checks the database pool |
+| `GET /readyz` | none | Readiness; checks database, embedder, provider and reranker (reranker non-gating) |
 | `POST /v1/query` | anonymous (demo limits) or API key | Answers with citations or a refusal |
 | `GET /v1/documents` | anonymous lists the `public` tenant; keyed lists own tenant | |
 | `POST /v1/documents` | API key with `write` scope, uploads enabled | Anonymous writes are 403 |
@@ -148,6 +148,9 @@ never printed, logged or committed.
 | `hosted_tpm` | 8000 | no | Provider tokens/minute pacing (90% buckets) |
 | `embedding_model` | `sentence-transformers/all-MiniLM-L6-v2` | no | ONNX embedding model |
 | `model_cache_dir` | — | no | fastembed model cache location |
+| `reranker_enabled` | true | no | Cross-encoder rerank of the dense top-N (P7.3) |
+| `reranker_model` | `Xenova/ms-marco-MiniLM-L-6-v2` | no | Reranker model id; files under `<model_cache_dir>/<model-id>/` |
+| `rerank_candidates` | 25 | no | Dense candidates reranked per query (final top_k unchanged) |
 | `git_sha` | — | no | Commit baked into the image at build time |
 | `uploads_enabled` | true | no | Master switch for upload/delete (release: false) |
 | `demo_daily_cap` | 300 | no | Anonymous questions per UTC day |
@@ -169,6 +172,28 @@ never printed, logged or committed.
 | `cache_threshold` | 0.86 | no | Cache similarity threshold (calibrated, C1) |
 | `cache_ttl_days` | 30 | no | Semantic cache entry lifetime |
 | `query_log_days` | 30 | no | Redacted demo query-log retention |
+
+### Cross-encoder reranker (P7.3)
+
+Retrieval is two-stage: the dense stage returns `rerank_candidates` (25)
+candidates and a local ONNX cross-encoder reorders them; the final `top_k`
+(10) go into the prompt unchanged. Chunk scores stay the dense cosine, so
+the evidence gate (a dense top-1 test) and the citation contract are
+unchanged.
+
+- Model files live under `<model_cache_dir>/<model-id>/`:
+  `onnx/model_quantized.onnx` plus `tokenizer.json`. Fetch them with
+  `python scripts/fetch_reranker.py --model <id> --out <dir>` (sha256
+  verified); the `models/` directory is gitignored and never committed.
+- The Docker image bakes the model in (`COPY models/ /opt/models/`).
+  A build fails without a fetched `models/` directory in the context.
+- If the reranker raises on a request, retrieval falls back to the dense
+  order (counted as `docmind_rerank_total{result="fallback"}`; only the
+  exception type is logged). The request never fails for a reranker error.
+- `/readyz` reports a `reranker` check (`ok`, `disabled`, or the exception
+  type). It is non-gating: the service stays ready without the reranker.
+- The semantic-cache scope includes the reranker model and candidate count,
+  so changing either invalidates cached answers.
 
 ### The `/metrics` access rule
 

@@ -168,7 +168,7 @@ def test_readyz_reports_real_components(make_client):
     assert response.status_code == 200
     assert response.json() == {
         "status": "ready",
-        "checks": {"database": "ok", "embedder": "ok", "provider": "fake"},
+        "checks": {"database": "ok", "embedder": "ok", "provider": "fake", "reranker": "disabled"},
     }
 
 
