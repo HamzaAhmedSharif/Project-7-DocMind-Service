@@ -1040,3 +1040,52 @@ Notes are recorded in the milestone sections below.
   reranked context (missed: none) — the design-check ceiling
   C'=26 confirmed through the shipped service path.
   E2_reranked 0.685 (ungated, informational).
+
+### A5/A6 — memory fix and admissibility verdict (2026-11-13)
+
+- A5 first attempt (full 25-pair batches, no lock): the 512 MB
+  container OOM-killed under concurrency 10 (peak 495.3 MB,
+  exit 137, 0/100 queries). Serialising inference with a lock
+  (fbc4b13, mirroring the embedder) did not fix it: still
+  OOM-killed (peak 511.9 MB, 1/100).
+- Diagnosis: the ORT arena grows to ~1.3 GB even serialised
+  (2 GB diagnostic run: 100/100 pass, memory plateaus
+  ~1.29 GB — arena growth, not a leak). Fix (4348bd8):
+  5-pair sub-batches plus the CPU arena disabled.
+- Sub-batching changes scores: the int8 model's dynamic
+  activation quantization makes scores depend on batch
+  composition (measured max full-vs-sub-batch score diff
+  0.45 logits; arena on/off exactly 0.0). Admissibility was
+  therefore re-verified under the shipped sub-batched
+  scoring (design check `--sub-batch 5`,
+  `evaluation/results/p73-design-check-subbatch.json`):
+  A1 pass, A2 pass (chunk 11 at rerank position 4, chunk 27
+  at position 5), A3 pass with C'=26, lost=[], gained=the
+  same 3 facts, A4 pass (2544 <= 3000). The pre-registration
+  A1-A4 (full batch) stand as the design's admissibility;
+  the sub-batch run is the shipped implementation's
+  verification.
+- Second memory problem: after sub-batching, L1 passed
+  (100/100, no OOM) but peak memory was still 511.8 MB
+  against the 480 MB gate. Decomposition showed anon memory
+  growing +170 MB after 3 sequential queries: glibc retained
+  freed per-run tensors across its many per-thread arenas.
+  Fix (da4ee22): `MALLOC_ARENA_MAX=2` and
+  `MALLOC_TRIM_THRESHOLD_=65536` in the Dockerfile. Memory
+  after 3 sequential queries fell to 233.7 MB; after 10
+  concurrent, 249.5 MB.
+- A5 final (100 queries, concurrency 10, 512 MB, fake
+  provider, 0 provider requests): 100/100 HTTP 200, peak
+  memory 324.2 MB <= 480 MB, container still running, no
+  OOM. A5 PASS.
+- A6 unconstrained: Session-1 foreground probe, 36 batches
+  of 25 pairs: p50 308 ms, p95 339 ms <= 3000 ms. A6 PASS.
+  The ~4 s SSH measurements were Windows power-throttling
+  of background (Session 0) processes: the same machine and
+  batches run 10x faster in the foreground while the CPU
+  sits 87% idle. Render-like profile (in-container, client
+  latency under concurrency 10): p50 4.10 s, p95 4.32 s,
+  dominated by lock queueing; the rerank itself is ~0.41 s
+  in-container. Informational only.
+- A5/A6 values: `evaluation/results/p73-a5-a6.json`.
+  Admissibility A1-A6 is now complete: all six hold.
