@@ -89,7 +89,7 @@ def term_overlap(question, context):
 class CrossEncoder:
     """ONNX cross-encoder via onnxruntime + tokenizers (no fastembed)."""
 
-    def __init__(self, model_dir):
+    def __init__(self, model_dir, sub_batch=0):
         import onnxruntime as ort
         from tokenizers import Tokenizer
 
@@ -106,6 +106,11 @@ class CrossEncoder:
         self.tokenizer.enable_padding(pad_id=0, pad_token="[PAD]")
         self.session = ort.InferenceSession(str(onnx_path), providers=["CPUExecutionProvider"])
         self.input_names = [i.name for i in self.session.get_inputs()]
+        # 0 = one full-batch run (the original A1-A4 config). N > 0 scores in
+        # N-pair sub-batches, mirroring the shipped adapter (RERANK_BATCH_SIZE).
+        # The int8 model's dynamic activation quantization makes scores depend
+        # on batch composition, so the two modes can rank differently.
+        self.sub_batch = sub_batch
 
     def score(self, question, passages):
         """Relevance score per passage; higher is more relevant."""
@@ -119,6 +124,14 @@ class CrossEncoder:
         for name in self.input_names:
             if name in arrays:
                 feed[name] = arrays[name]
+        if self.sub_batch and len(passages) > self.sub_batch:
+            parts = []
+            for start in range(0, len(passages), self.sub_batch):
+                sub = {name: arr[start : start + self.sub_batch] for name, arr in feed.items()}
+                batch_logits = self.session.run(None, sub)[0]
+                batch_logits = np.asarray(batch_logits, dtype=np.float64)
+                parts.append(batch_logits[:, 0] if batch_logits.ndim == 2 else batch_logits)
+            return np.concatenate(parts)
         logits = self.session.run(None, feed)[0]
         logits = np.asarray(logits, dtype=np.float64)
         return logits[:, 0] if logits.ndim == 2 else logits
@@ -129,6 +142,7 @@ def main():
     ap.add_argument("--model-dir", default=None)
     ap.add_argument("--model-id", default=None)
     ap.add_argument("--out", default="evaluation/results/p73-design-check.json")
+    ap.add_argument("--sub-batch", type=int, default=0)
     args = ap.parse_args()
 
     chunks = load("data/work/chunks.json")
@@ -242,13 +256,14 @@ def main():
         return 0
 
     # ---- Reranked contexts ----
-    ce = CrossEncoder(args.model_dir)
+    ce = CrossEncoder(args.model_dir, sub_batch=args.sub_batch)
     out["model"] = {
         "id": args.model_id,
         "route": "onnxruntime + tokenizers (fastembed 0.9.1 has no "
         "TextCrossEncoder; ruling fallback)",
         "onnx_file": ce.onnx_path.name,
         "onnx_bytes": ce.onnx_bytes,
+        "sub_batch": args.sub_batch,
     }
     latencies = []
     c_prime = 0

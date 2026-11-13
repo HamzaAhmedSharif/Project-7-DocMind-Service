@@ -31,6 +31,12 @@ logger = logging.getLogger("docmind_service.rerank")
 
 MAX_SEQUENCE_LENGTH = 512
 
+# Pairs scored per ORT run. A full 25-pair batch grows the ORT arena to
+# ~1 GB (measured 2026-11-13: the 512 MB container OOM'd); 5-pair runs
+# keep the arena small. Scores are identical to a full batch: pairs are
+# independent (padding is masked), so splitting changes nothing.
+RERANK_BATCH_SIZE = 5
+
 
 class Reranker(Protocol):
     """Reorders retrieved chunks by cross-encoder relevance; never changes scores."""
@@ -57,6 +63,12 @@ class OnnxCrossEncoderReranker:
     2026-11-13: 10 concurrent queries killed it at 495 MB). This
     mirrors the embedder's lock in ``embedding.py``. Scores are
     unaffected — concurrent calls queue, they do not change.
+
+    Pairs are scored in sub-batches (``RERANK_BATCH_SIZE``) and the
+    CPU memory arena is disabled: a full 25-pair batch grows the
+    arena to ~1 GB even serialised, which the 512 MB container
+    cannot hold. Sub-batching keeps the live tensors small and the
+    arena off keeps nothing retained between runs.
     """
 
     def __init__(self, model_name: str, *, cache_dir: str | Path | None):
@@ -79,7 +91,11 @@ class OnnxCrossEncoderReranker:
         self._tokenizer = Tokenizer.from_file(str(tokenizer_path))
         self._tokenizer.enable_truncation(max_length=MAX_SEQUENCE_LENGTH)
         self._tokenizer.enable_padding(pad_id=0, pad_token="[PAD]")
-        self._session = ort.InferenceSession(str(onnx_path), providers=["CPUExecutionProvider"])
+        options = ort.SessionOptions()
+        options.enable_cpu_mem_arena = False
+        self._session = ort.InferenceSession(
+            str(onnx_path), sess_options=options, providers=["CPUExecutionProvider"]
+        )
         self._input_names = [entry.name for entry in self._session.get_inputs()]
         self._lock = threading.Lock()
 
@@ -93,9 +109,13 @@ class OnnxCrossEncoderReranker:
             "token_type_ids": np.array([e.type_ids for e in encodings], dtype=np.int64),
         }
         feed = {name: arrays[name] for name in self._input_names if name in arrays}
+        parts = []
         with self._lock:
-            logits = np.asarray(self._session.run(None, feed)[0], dtype=np.float64)
-        scores = logits[:, 0] if logits.ndim == 2 else logits
+            for start in range(0, len(chunks), RERANK_BATCH_SIZE):
+                sub = {name: arr[start : start + RERANK_BATCH_SIZE] for name, arr in feed.items()}
+                logits = np.asarray(self._session.run(None, sub)[0], dtype=np.float64)
+                parts.append(logits[:, 0] if logits.ndim == 2 else logits)
+        scores = np.concatenate(parts)
         # Stable sort: ties keep the dense (candidate) order, as in the design check.
         order = sorted(range(len(chunks)), key=lambda i: -scores[i])
         return [chunks[i] for i in order]
