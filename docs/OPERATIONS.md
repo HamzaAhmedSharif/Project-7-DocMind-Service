@@ -194,6 +194,13 @@ unchanged.
   type). It is non-gating: the service stays ready without the reranker.
 - The semantic-cache scope includes the reranker model and candidate count,
   so changing either invalidates cached answers.
+- Memory: inference is serialised (one query's rerank at a time) and
+  scored in 5-pair sub-batches with the ORT CPU arena off — a full
+  25-pair batch grows the arena past 1 GB. The image also sets
+  `MALLOC_ARENA_MAX=2` and `MALLOC_TRIM_THRESHOLD_=65536`: without
+  them glibc retains freed per-run tensors across its arenas
+  (+170 MB after 3 queries, OOM under concurrency 10 at 512 MB).
+  Peak under concurrency 10 at 512 MB is ~250 MB with the tuning.
 
 ### The `/metrics` access rule
 

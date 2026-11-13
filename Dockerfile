@@ -6,6 +6,14 @@ COPY requirements.lock .
 RUN pip install -r requirements.lock
 ARG HF_ENDPOINT
 RUN python -c "from fastembed import TextEmbedding; TextEmbedding('sentence-transformers/all-MiniLM-L6-v2', cache_dir='/opt/models')"
+# P7.3: glibc malloc tuning for the 512 MB container. The reranker's
+# per-run tensors are freed after each query, but glibc retains them
+# across its many per-thread arenas (+170 MB after 3 queries, measured
+# 2026-11-13, OOM under concurrency 10). Two arenas plus a 64 KiB trim
+# threshold return freed blocks to the OS promptly; peak under the same
+# load drops to ~250 MB. No effect on scores or behaviour. (Placed here,
+# after the pip/embedder layers, so editing it does not rebuild them.)
+ENV MALLOC_ARENA_MAX=2 MALLOC_TRIM_THRESHOLD_=65536
 # P7.3: the cross-encoder reranker model is copied from the build context
 # (models/<model-id>/...), never downloaded at build time; fetch it first
 # with `python scripts/fetch_reranker.py --model <id> --out models`.
