@@ -15,6 +15,7 @@ instead of a fastembed upgrade. Tokenization mirrors the P7.3 design check
 from __future__ import annotations
 
 import logging
+import threading
 from pathlib import Path
 from typing import Protocol
 from uuid import uuid4
@@ -49,6 +50,13 @@ class OnnxCrossEncoderReranker:
     The model is baked into the image at build time (``COPY models/``) and
     fetched for CI by ``scripts/fetch_reranker.py``; it is never downloaded
     at runtime.
+
+    Inference is serialised with a lock: ORT ``session.run`` is
+    thread-safe, but concurrent 25-pair runs each allocate large
+    activation buffers and OOM the 512 MB container (measured
+    2026-11-13: 10 concurrent queries killed it at 495 MB). This
+    mirrors the embedder's lock in ``embedding.py``. Scores are
+    unaffected — concurrent calls queue, they do not change.
     """
 
     def __init__(self, model_name: str, *, cache_dir: str | Path | None):
@@ -73,6 +81,7 @@ class OnnxCrossEncoderReranker:
         self._tokenizer.enable_padding(pad_id=0, pad_token="[PAD]")
         self._session = ort.InferenceSession(str(onnx_path), providers=["CPUExecutionProvider"])
         self._input_names = [entry.name for entry in self._session.get_inputs()]
+        self._lock = threading.Lock()
 
     def rerank(self, question: str, chunks: list[RetrievedChunk]) -> list[RetrievedChunk]:
         if not chunks:
@@ -84,7 +93,8 @@ class OnnxCrossEncoderReranker:
             "token_type_ids": np.array([e.type_ids for e in encodings], dtype=np.int64),
         }
         feed = {name: arrays[name] for name in self._input_names if name in arrays}
-        logits = np.asarray(self._session.run(None, feed)[0], dtype=np.float64)
+        with self._lock:
+            logits = np.asarray(self._session.run(None, feed)[0], dtype=np.float64)
         scores = logits[:, 0] if logits.ndim == 2 else logits
         # Stable sort: ties keep the dense (candidate) order, as in the design check.
         order = sorted(range(len(chunks)), key=lambda i: -scores[i])
