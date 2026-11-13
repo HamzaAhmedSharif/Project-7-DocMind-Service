@@ -50,6 +50,10 @@ RUN_CONFIGS = {
     # P7.2 re-runs (post-hoc iteration; prompt p7-v3, quote-anchored repair).
     "A3": {"guardrails": True, "prompt_version": "p7-v3"},
     "B3": {"guardrails": True, "prompt_version": "p7-v3"},
+    # P7.3 re-runs (post-hoc iteration; retrieval unfrozen — cross-encoder
+    # reranker in the p73 image; same prompt p7-v3, guardrails on).
+    "A4": {"guardrails": True, "prompt_version": "p7-v3"},
+    "B4": {"guardrails": True, "prompt_version": "p7-v3"},
 }
 
 
