@@ -831,3 +831,142 @@ Notes are recorded in the milestone sections below.
   Project 7's S1 record stands at A 10/26, B 16/26 (M8);
   A2 22/26, B2 17/26 (P7.1); A3 20/26, B3 21/26 (P7.2) — 19 of
   23 groundable in both P7.2 runs.
+
+## P7.3 - cross-encoder reranker, retrieval unfrozen (2026-11-13)
+
+### Pre-registration (written before any P7.3 provider run)
+
+- Context: P7.2 closed with S1 at 20/26 and 21/26 against the
+  >= 22-in-both gate, and a stop rule of no P7.3. On 2026-11-11
+  Hamza decided, explicitly and against Sol's leave-as-is
+  recommendation, to open one more round targeting S1 >= 22 in
+  both runs by unfreezing retrieval, accepting that this spends
+  Project 9's headline variable (P9 must be redesigned; the
+  brief is a P7.3 deliverable) and that a miss closes Project 7
+  permanently. This section supersedes the P7.2 stop rule by
+  owner decision; the P7.2 entry above is not edited.
+- Planner ruling: Claude ruled 2026-11-13 (relayed by Hamza;
+  verified complete against the seven questions by Sol the same
+  day, no follow-up needed). Approved design: a local zero-cost
+  cross-encoder reranker, candidate pool N = 25, final top_k
+  stays 10. Honest estimate: central raw S1 about 22 per run
+  (range 19-25); P(>= 22 in a given run) about 55%; P(both)
+  about 40%. Not guaranteed.
+- Free admissibility check (zero provider calls, 2026-11-13,
+  `evaluation/p73_design_check.py`, results in
+  `evaluation/results/p73-design-check.json`): A1 the harness
+  reproduces C = 23 and ranks 11/11/18 under dense-only; A2
+  chunk 11 enters d02's final context at rerank position 4 and
+  chunk 27 enters d09's at position 4; A3 the new ceiling is
+  C' = 26 with zero baseline-present facts lost (the 3 gained
+  facts are exactly the retrieval-absent ones); A4 the fitted
+  token projection is 2,543 mean prompt tokens against the
+  3,000 admissibility limit. A1-A4 pass. A5 (MEM/L1) and A6
+  (latency) are measured after implementation, before any
+  provider run; either failing means no provider runs and
+  Project 7 closes. A6 early signal: steady-state rerank is
+  about 350 ms per 25-pair batch on the laptop; one probe run
+  showed a transient ~4 s (investigated, not reproduced,
+  attributed to laptop contention; restricting the ORT thread
+  count made it 5-8x slower and is rejected).
+- Token fit (replaces the ruling's estimates): prompt_tokens
+  against total chunk characters on the 23 single-call A3/B3
+  doc prompts gives slope 0.136 tokens/char and overhead 1,224
+  tokens (residual std 169, max 365). The ruling estimated O
+  ~270 and ~190 per chunk; the fitted numbers govern. The
+  reranked contexts (9,491-9,953 chars) sit against the fit's
+  x-range (8,932-9,915): the largest exceeds it by 38 chars
+  (0.4%, about 5 tokens), a negligible extrapolation.
+- Chosen model: Xenova/ms-marco-MiniLM-L-6-v2, the first (and
+  smallest) candidate, artifact `onnx/model_quantized.onnx`
+  (int8, 23,143,499 bytes). Candidates 2-3 were not tried. The
+  pinned fastembed 0.9.1 has no TextCrossEncoder class, so the
+  reranker runs via onnxruntime + tokenizers directly — the
+  ruling's pre-authorised fallback, not a design change. The
+  laptop cannot reach HuggingFace (direct connection times out;
+  the mirror does not resolve), so the model files were
+  downloaded on Sol's VM and transferred to the laptop; the
+  model is NOT vendored in git — CI downloads and caches it,
+  and the laptop image build uses a local untracked `models/`
+  directory in the build context.
+- What ships (a real service change): `docmind_service/rerank.py`
+  (Reranker protocol, OnnxRuntime adapter, Noop, fake for
+  tests); `PgStore.retrieve` takes SQL LIMIT N, reranks, then
+  top_k, and `InMemoryRetriever` mirrors it; settings
+  `RERANKER_ENABLED` (default true), `RERANKER_MODEL`,
+  `RERANK_CANDIDATES` = 25 (documented in OPERATIONS.md and the
+  env files); graceful degradation to dense order on any
+  reranker exception (exception type only in the log, counted,
+  the request never fails); the Dockerfile bakes the model into
+  MODEL_CACHE_DIR; the cache scope hash includes the reranker
+  model, N and top_k; `/readyz` gains a `reranker` check entry;
+  metrics `docmind_rerank_seconds` and
+  `docmind_rerank_total{result=ok|fallback}`; tests for reorder
+  and top_k, fallback, no text in logs, settings, and
+  cache-scope separation. The evidence gate stays on the dense
+  top-1 cosine (0.35); citation `score` stays the dense cosine.
+- Gates (nothing moves silently; `evaluation/gates.json` is not
+  edited — the rulings live in `evaluation/p73_prereg.json` and
+  here): S1 >= 22/26 raw in BOTH runs A4 and B4 (fixed by owner
+  decision). E2 unchanged at 0.90, measured on the DENSE
+  candidate stage against the FAISS reference (embedding
+  parity); the overlap of the final reranked context with the
+  reference is reported ungated. E3 unchanged at >= 23/26 with
+  its dagger, now measured on the FINAL context; C' is reported
+  beside it and is not E3. S5 unchanged at <= 3200. S2 unchanged
+  at >= 3/4 per run, reported as abstained/measured with n
+  measured; 503 = not measured, and with fewer than 3 absent
+  questions measured S2 is "not assessable", never "met". R1
+  unchanged at <= 2 final hits, with an on-arm re-check
+  required. C1 and G3 unchanged; MEM and L1 are re-measured
+  with the reranker (A5).
+- Frozen: the questions and scorer regexes (no phrasing-tuning
+  to them — d03/d12 stay at-risk facts, not design targets),
+  the evidence threshold (0.35, dense top-1), cache tau (0.86),
+  prompt p7-v3 (no bump), the embedding model, the chunker
+  (150/25), the 49-chunk corpus, and the held-out manifest.
+  Unfrozen: only the second retrieval stage (the reranker and
+  candidate pool N).
+- Abstention safety: a01-a04 clear the 0.35 gate, so abstention
+  rests on the model. The free pre-check (term overlap and
+  top-10 composition, baseline vs reranked) shows no safety
+  signal (overlaps move at most 0.11). SAFETY REGRESSION is
+  pre-defined: any absent question that abstained in BOTH A3
+  and B3 (a01, a02) is answered in A4 or B4. If S1 passes WITH
+  a safety regression, S1 is recorded as "met with safety
+  regression" and the reranker ships default OFF; with no
+  safety regression it ships ON whether or not S1 passes.
+- Budget and protocol: at most 80 provider requests in total
+  and at most 60 per UTC day, successful-call counting (the
+  ledger is the authority; every provider-calling script writes
+  its own rows). A4 on UTC day 1 (<= 28 incl. repairs), B4 on
+  UTC day 2 (<= 28), then the R1 re-check on day 2 (on-arm, 1
+  repeat, 15 requests). CI release-smoke runs count (1 each),
+  so pushes are batched: worst case 71 + 2 = 73 against the 80
+  cap. Only 503 casualties are re-run, at most 5 repair rounds
+  per run; still-503 = not measured; no other re-rolls. A4/B4
+  use the shipped service path, cache off, guardrails default,
+  the repair retry as shipped, design P with the selected
+  model. B4 starts only after A4 is recorded; nothing changes
+  between them.
+- Expected range: raw S1 central 22 per run (range 19-25).
+  Gains available: d09 up to +2 (label smoothing and residual
+  dropout, now groundable), d02's second fact +1 in A-type runs
+  (B3 already got it from memory). Expected losses: d12 ~0.85,
+  d03 ~0.7 (scorer phrasing), d07 ~0.7 (model omission), plus
+  ~0.7 context-change regression risk.
+- Stop rule (final): whatever lands is recorded. A miss, or an
+  inadmissible design, closes Project 7 permanently — no P7.4.
+  Runs A through B4 stay in every table with the remediation
+  label ("retrieval unfrozen" for P7.3 rows) and the
+  tuned-on-the-same-questions disclosure.
+- Manager clarifications (Sol; no gate substance changed): the
+  push uses Sol's established Session-1 scheduled-task route
+  (the ruling's "[H1] push" label is Claude's assumption, not
+  a new Hamza action); "smallest that passes" is judged by
+  measured ONNX size; the A6 "render-like profile" is rerank
+  latency inside the 512 MB-constrained container; the S5
+  projection is the mean over the 12 doc questions of the
+  fitted values, and is conservative because the harness S5
+  denominator also includes non-refused absent rows (503s at 0
+  tokens lower it).

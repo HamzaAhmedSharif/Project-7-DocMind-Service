@@ -1,0 +1,235 @@
+{
+  "admissibility": {
+    "A1_harness_validity": {
+      "measured": {
+        "C_recomputed": 23,
+        "ranks": {
+          "d02_scaling": 11,
+          "d02_softmax": 11,
+          "d09_label_smoothing": 18
+        },
+        "top10_matches_reference_all": true
+      },
+      "pass": true,
+      "requirement": "Harness reproduces C=23 and ranks 11/11/18 under dense-only."
+    },
+    "A2_target_chunks": {
+      "measured": {
+        "d02_chunk11_rerank_position": 4,
+        "d09_chunk27_rerank_position": 4
+      },
+      "pass": true,
+      "requirement": "Chunk 11 is in d02's final context and chunk 27 is in d09's."
+    },
+    "A3_no_facts_lost": {
+      "measured": {
+        "C_prime": 26,
+        "gained_facts": [
+          "d02: softmax over the scaled dot products",
+          "d02: scaling by the square root of the key dimension",
+          "d09: label smoothing"
+        ],
+        "lost_facts": []
+      },
+      "pass": true,
+      "requirement": "No fact that is regex-present at baseline top-10 becomes absent (all 26 facts)."
+    },
+    "A4_token_projection": {
+      "measured": {
+        "projected_mean_prompt_tokens_k10": 2543.2,
+        "projected_mean_prompt_tokens_k12_F1": 2800.9
+      },
+      "method": "Least-squares fit of prompt_tokens against total chunk characters on the 23 single-call A3/B3 doc prompts (calls==1, status 200, not refused): slope 0.1364 tokens/char, intercept (overhead) 1223.5 tokens, residual std 169.2, max abs residual 364.7. Replaces the ruling's estimates (O ~270, ~190/chunk). Projection is the mean over the 12 doc questions of the fitted values on the reranked top-10 contexts. Reranked context chars (9491-9953) against the fit's x-range (8932-9915): the largest exceeds the range by 38 chars (0.4%, about 5 tokens at the fitted slope), a negligible extrapolation; the 457-token margin to the limit dwarfs both it and the max residual (365).",
+      "pass": true,
+      "requirement": "Projected mean prompt tokens <= 3000, computed on the actual new prompts."
+    },
+    "A5_memory_load": {
+      "measured": null,
+      "requirement": "MEM <= 480 MB and L1 zero 5xx/OOM at concurrency 10 under 512 MB with the model loaded (free load subset).",
+      "status": "pending implementation"
+    },
+    "A6_latency": {
+      "early_signal": "Design-check run (cold, n=12): p50 1427 ms, p95 4442 ms. Follow-up probe (warm-up + 3 rounds x 12, n=36): p50 4071 ms, p95 4615 ms. Investigated the same evening: a second probe timing encode/infer separately (default vs tuned ORT session) showed the default session at 320-432 ms per 25-pair batch with encode ~2 ms. The slow runs were transient laptop contention (cause unidentified; the machine was fairly idle at re-test). Restricting ORT to 4 threads made it 5-8x slower and is rejected. Steady-state expectation ~350 ms; the formal A6 is measured post-implementation.",
+      "measured": null,
+      "requirement": "Rerank p95 <= 3 s (unconstrained profile); also record p50 and the render-like profile (rerank latency inside the 512 MB-constrained container).",
+      "status": "pending implementation"
+    },
+    "note": "All of A1-A6 must hold before any provider run. A1-A4 measured 2026-11-13 by evaluation/p73_design_check.py (zero provider calls); A5/A6 are measured after implementation, before any provider run (they cannot exist before the code does).",
+    "verdict_A1_A4": "pass"
+  },
+  "budget_protocol": {
+    "config_A4_B4": "Shipped service path, cache off, guardrails default, repair retry as shipped, design P with the selected model.",
+    "counting": "Successful calls only; the ledger is the authority; every provider-calling script writes its own rows. CI release-smoke runs count (1 each): batch pushes.",
+    "ordering": "Pass/fail only on the pre-registered gates; B4 starts only after A4 is recorded; nothing is changed between them.",
+    "per_utc_day_cap": 60,
+    "plan": "A4 on UTC day 1 (<= 28 incl. repairs), B4 on UTC day 2 (<= 28), then the R1 re-check on day 2 (on-arm, 1 repeat, 15 requests). Worst-case total 71 + 2 release-smoke calls (pre-run push + close-out push) = 73 <= 80. Per-day worst case: day 1 = 28 (A4) + 1 (pre-run push smoke) = 29; day 2 = 28 (B4) + 15 (R1) + 1 (close-out push smoke, if same day) = 44; both <= 60.",
+    "repair_rule": "Only 503 casualties re-run, <= 5 repair rounds per run, still-503 = not measured. No other re-rolls.",
+    "total_cap": 80
+  },
+  "design": {
+    "candidate_pool_N": 25,
+    "candidates_smallest_first": [
+      "Xenova/ms-marco-MiniLM-L-6-v2",
+      "jinaai/jina-reranker-v1-tiny-en",
+      "Xenova/ms-marco-MiniLM-L-12-v2"
+    ],
+    "citation_score": "Stays the dense cosine (no contract change; G3 stays green).",
+    "cross_encoder_route": "onnxruntime + tokenizers directly with the Xenova ONNX file. The pinned fastembed 0.9.1 has no TextCrossEncoder class (verified 2026-11-13); upgrading fastembed would need a lock refresh plus E1/E2 and determinism re-checks, which the ruling rules out for P7.3.",
+    "demo_parity": "YES. The HF Space takes the same change. If the Space build fails twice, keep the previous Space release and state the release SHA and 'bi-encoder only' in the Space README and the P7 README.",
+    "description": "Dense retrieval unchanged (all-MiniLM-L6-v2 ONNX, exact cosine, same chunker 150/25) returns N=25 candidates; a local ONNX cross-encoder reranks them against the user question; the top 10 go into the p7-v3 prompt unchanged (c1..c10 in rerank order).",
+    "evidence_gate": "Stays on the DENSE top-1 cosine (0.35).",
+    "fallback_F1": "Only if P fails admissibility for all three candidate models: same pool N=25, final top_k = 12. If F1 also fails: no provider runs; Project 7 closes; code not shipped.",
+    "final_top_k": 10,
+    "model_acquisition": "The laptop cannot reach HuggingFace (direct: ConnectTimeout; hf-mirror.com: DNS failure, both verified 2026-11-13). Model files were downloaded on Sol's VM and transferred to the laptop (C:\\Users\\ha684\\p73-models\\ms-marco-MiniLM-L-6-v2). The model is NOT vendored in git: CI downloads and caches it, the laptop image build uses a local untracked models/ directory in the build context.",
+    "primary": "P",
+    "selected": {
+      "model": "Xenova/ms-marco-MiniLM-L-6-v2",
+      "onnx_artifact": "onnx/model_quantized.onnx (int8)",
+      "onnx_bytes": 23143499,
+      "reason": "First candidate; passed A1-A4 (see admissibility). Candidates 2-3 not tried."
+    },
+    "selection_rule": "Choose the SMALLEST (by measured ONNX download size) that passes admissibility A1-A6.",
+    "what_ships": [
+      "docmind_service/rerank.py: Reranker protocol, OnnxRuntime adapter, Noop, and a fake for tests.",
+      "PgStore.retrieve: SQL LIMIT N, then rerank, then top_k. InMemoryRetriever mirrors it.",
+      "Settings (DOCMIND_ prefix): RERANKER_ENABLED (default true), RERANKER_MODEL, RERANK_CANDIDATES=25. Added to deploy/release.env, .env.example, OPERATIONS.md.",
+      "Graceful degradation: if the reranker raises, fall back to dense order, log the exception TYPE only, count it. Never fail the request.",
+      "Dockerfile bakes the model into MODEL_CACHE_DIR (COPY from the build-context models/ directory; CI downloads it first).",
+      "Cache scope_hash includes the reranker model, N and top_k.",
+      "/readyz adds a 'reranker' check entry (dict, so OpenAPI is unchanged).",
+      "Metrics: docmind_rerank_seconds histogram and docmind_rerank_total{result=ok|fallback}.",
+      "Tests: reorder and top_k; fallback; no text in logs (unique-string); settings; cache-scope separation.",
+      "CI retrieval-eval: E2 on the dense stage, E3 on the final context; cache the cross-encoder download."
+    ],
+    "why_not_hybrid": "Two levers, no attribution; kept only as F1.",
+    "why_not_top_k": "top_k 18 projects ~3.7k mean prompt tokens (breaches S5 3200) and adds distractors; top_k 15 leaves under 100 tokens of margin once repairs count."
+  },
+  "expected_range": {
+    "P_both_runs": 0.4,
+    "P_ge_22_per_run": 0.55,
+    "expected_losses": "d12 ~0.85, d03 ~0.7 (scorer phrasing, not design targets), d07 ~0.7 (model omission), plus ~0.7 context-change regression risk.",
+    "gains": "d09 up to +2 (label smoothing and residual dropout, now groundable); d02's second fact +1 in A-type runs (B3 already got it from memory).",
+    "raw_S1_per_run": "central 22, range 19-25",
+    "variance_note": "Provider variance looks smaller than before (groundable 19 and 19), but the context composition changes for every question, so treat it as live."
+  },
+  "frozen": [
+    "questions and scorer regexes (do NOT tune phrasing to them)",
+    "evidence threshold 0.35 on the dense top-1",
+    "cache tau 0.86",
+    "prompt p7-v3 (no bump)",
+    "embedding model all-MiniLM-L6-v2",
+    "chunker 150/25",
+    "the 49-chunk corpus",
+    "the held-out manifest (Project 9)"
+  ],
+  "gates": {
+    "C1_cache": {
+      "ruling": "unchanged"
+    },
+    "E2": {
+      "measurement_point": "The DENSE candidate stage against the FAISS reference (its purpose is embedding parity; expected to stay 1.000). Also report, ungated, the overlap of the final reranked context with the reference.",
+      "ruling": "(iii) unchanged",
+      "value": 0.9
+    },
+    "E3": {
+      "measurement_point": "The FINAL context. Report C' beside it. C' >= 25 is not E3; it is the admissibility gate A2/A3.",
+      "ruling": "(iii) unchanged",
+      "value": ">= 23/26 with its dagger"
+    },
+    "G3_contract": {
+      "ruling": "unchanged"
+    },
+    "MEM_L1": {
+      "ruling": "re-measured with the reranker (A5)"
+    },
+    "R1": {
+      "recheck": "required (see protocol)",
+      "ruling": "(iii) unchanged",
+      "value": "<= 2 final hits"
+    },
+    "S1": {
+      "gate": ">= 22/26 raw in BOTH runs A4 and B4",
+      "ruling": "fixed by owner decision"
+    },
+    "S2": {
+      "reporting": "Abstained/measured with n measured. 503 = not measured (P7.2 precedent). If fewer than 3 absent questions are measured, S2 is 'not assessable', never 'met'.",
+      "ruling": "(iii) unchanged",
+      "value": ">= 3 of 4 per run"
+    },
+    "S5": {
+      "note": "The token arithmetic (A4) is mandatory.",
+      "ruling": "(iii) unchanged",
+      "value": "<= 3200"
+    },
+    "note": "Nothing moves silently. gates.json is not edited; these rulings live here and in DECISIONS.md."
+  },
+  "labels": "A, B, A2, B2, A3, B3, A4, B4 stay in every table; P7.3 rows carry 'retrieval unfrozen'; the tuned-on-the-same-questions disclosure appears everywhere (post-hoc iteration, tuned on the evaluation questions; held-out check is Project 9).",
+  "manager_clarifications": [
+    "A5/A6 are measured after implementation, before any provider run; they cannot be measured before the code exists. Failure of either means no provider runs and Project 7 closes.",
+    "Push via Sol's established Session-1 scheduled-task route (verified in P7.1/P7.2); Hamza only if that route fails. The ruling's '[H1] push' label is Claude's assumption, not a new Hamza action.",
+    "'Smallest that passes' is judged by measured ONNX download size, not list order.",
+    "'Render-like profile' in A6 means rerank latency measured inside the 512 MB-constrained container.",
+    "The reranker adapter is an OnnxRuntime adapter (not a FastEmbed adapter), because the pinned fastembed lacks the class; this is the ruling's fallback branch, not a design change.",
+    "The ONNX artifact is model_quantized.onnx (int8), the standard Xenova deployment artifact.",
+    "The S5 projection (A4) is the mean over the 12 doc questions of the fitted values on the reranked contexts. The harness S5 denominator also includes non-refused absent rows (503s at 0 tokens lower it), so the projection is conservative."
+  ],
+  "note": "Pre-registered before any P7.3 provider run. Append-only: this file is not edited after registration; measured results go in DECISIONS.md and the results files. evaluation/gates.json is NOT edited for P7.3.",
+  "order": [
+    "pre-registration commit (this file + DECISIONS + design check + results)",
+    "implementation, tests and image",
+    "MEM/L1/latency (A5/A6)",
+    "push (Sol's Session-1 scheduled-task route; the ruling's [H1] label is a manager clarification, not a Hamza action)",
+    "A4 (UTC day 1)",
+    "B4 (UTC day 2)",
+    "R1 re-check (UTC day 2)",
+    "close-out: image rebuild, release-smoke, Space re-sync, README/FACTS/EVALUATION/OPERATIONS, P9 brief (docs/P9-REDESIGN-BRIEF.md), closing DECISIONS entry"
+  ],
+  "outcome_table": {
+    "inadmissible": "no provider runs, close Project 7, code not shipped",
+    "met_no_safety_regression": "ship ON",
+    "met_with_safety_regression": "ship OFF (RERANKER_ENABLED=false)",
+    "not_met_no_safety_regression": "ship ON, close Project 7"
+  },
+  "owner_decision": {
+    "consequence_accepted": "Retrieval improvement was Project 9's headline variable; P9 must be redesigned (brief in docs/P9-REDESIGN-BRIEF.md, a P7.3 deliverable).",
+    "decision": "Open one more round, P7.3, targeting S1 >= 22/26 raw in BOTH runs by unfreezing retrieval in Project 7.",
+    "made_by": "Hamza Ahmed Sharif (owner), 2026-11-11",
+    "planner_ruling": "Claude ruling relayed 2026-11-13; verified complete against the 7 questions in the P7.3 prompt by Sol, 2026-11-13. No follow-up to Claude was needed.",
+    "supersedes": "The P7.2 stop rule ('no A4/B4, no P7.3') is superseded by owner decision. The P7.2 DECISIONS entry is not edited."
+  },
+  "q4_precheck_free": {
+    "a01": {
+      "dense_top1": 0.382,
+      "term_overlap_baseline": 0.667,
+      "term_overlap_reranked": 0.556
+    },
+    "a02": {
+      "dense_top1": 0.586,
+      "term_overlap_baseline": 0.667,
+      "term_overlap_reranked": 0.778
+    },
+    "a03": {
+      "dense_top1": 0.456,
+      "term_overlap_baseline": 0.4,
+      "term_overlap_reranked": 0.5
+    },
+    "a04": {
+      "dense_top1": 0.383,
+      "term_overlap_baseline": 0.7,
+      "term_overlap_reranked": 0.7
+    },
+    "note": "Informational: for a01-a04, top-10 chunk ids, dense and rerank scores and question-term overlap, baseline vs P. No safety signal: overlaps move at most 0.11."
+  },
+  "registered_on": "2026-11-13",
+  "round": "P7.3",
+  "safety_regression": {
+    "consequence": "If S1 passes WITH a safety regression, record S1 as 'met with safety regression' and ship the reranker default OFF (RERANKER_ENABLED=false). If no safety regression, ship ON whether or not S1 passes.",
+    "definition": "Any absent question that abstained in BOTH A3 and B3 (a01, a02) is answered in A4 or B4.",
+    "note": "a03/a04 were never measurable, so they cannot regress, but if measured and answered they fail S2 and are reported."
+  },
+  "stop_rule": "Whatever lands is recorded; a miss, or an inadmissible design, closes Project 7 permanently (no P7.4).",
+  "unfrozen": [
+    "only the second retrieval stage (reranker and candidate pool N)"
+  ],
+  "version": 1
+}
