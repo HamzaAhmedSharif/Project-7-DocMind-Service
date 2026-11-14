@@ -16,7 +16,7 @@ The language model is an external hosted API (Groq free tier,
 The API surface is deliberately small — six operations — because the
 service does one thing: grounded question-answering over a document
 corpus, with citations. Everything else (auth, limits, guardrails,
-caching) exists to make that one thing safe to expose.
+caching) exists to harden that one thing for exposure.
 
 ```mermaid
 flowchart LR
