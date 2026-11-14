@@ -1202,3 +1202,17 @@ Notes are recorded in the milestone sections below.
   cache scoping and logging in one file. Not refactored — splitting
   routers in a verified system risks behaviour change for no
   measured gain; the refactor is P10 work, not P7 polish.
+
+### Release v1.0.0 (2026-11-14)
+
+- First tagged release. Version bumped 0.1.0 -> 1.0.0; the OpenAPI
+  contract regenerated (version field only). No behaviour change.
+- Release contents: the M8 service plus the P7.1/P7.2/P7.3
+  remediation rounds (S1 23/26 and 24/26 against the >=22 gate),
+  the presentation-polish pass (README rewrite, screenshots,
+  Dockerfile self-fetch, CI coverage + non-blocking mypy), all
+  seven Dependabot updates applied (four merged as PRs, three
+  superseded by direct commits carrying the exact PR SHAs), and a
+  regenerated requirements.lock.
+- The v1.0.0 tag points at the release commit; the GitHub release
+  notes link the GHCR image published by the release job.

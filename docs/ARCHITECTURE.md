@@ -13,6 +13,11 @@ The language model is an external hosted API (Groq free tier,
 `openai/gpt-oss-120b`) behind an adapter; the embedding model is local
 (fastembed ONNX, `all-MiniLM-L6-v2`, 384 dimensions, baked into the image).
 
+The API surface is deliberately small — six operations — because the
+service does one thing: grounded question-answering over a document
+corpus, with citations. Everything else (auth, limits, guardrails,
+caching) exists to make that one thing safe to expose.
+
 ```mermaid
 flowchart LR
   C[Client] -->|HTTPS| API[FastAPI service - 1 worker]
