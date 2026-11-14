@@ -347,6 +347,91 @@ resisted 15/15 — the p7-v3 prompt did not weaken injection
 resistance. Provider spend for P7.2: 48 recorded requests (A3 17,
 B3 16, R1 15) against the 70 cap.
 
+## S1 retrieval unfrozen (P7.3) — after remediation (post-hoc iteration, tuned on the evaluation questions)
+
+P7.2 closed with the gate unmet and the largest remaining loss
+identified as retrieval rank — the lever P7.2 had deliberately
+frozen as Project 9's variable. The owner then decided, against the
+manager's leave-as-is recommendation, to spend that lever inside
+Project 7: P7.3 unfreezes retrieval with one real service change, a
+local zero-cost cross-encoder reranker, under a final stop rule (a
+miss closes Project 7 permanently, no P7.4) and a pre-registered
+gate of S1 ≥ 22/26 in BOTH runs. Project 9 must be redesigned
+around the spent variable (see `docs/P9-REDESIGN-BRIEF.md`).
+
+Design. The dense stage (ONNX `all-MiniLM-L6-v2`, exact cosine,
+same 150/25 chunker) returns 25 candidates; a local ONNX
+cross-encoder (`Xenova/ms-marco-MiniLM-L-6-v2`, int8 quantized)
+reranks them against the question; the top 10 go into the p7-v3
+prompt unchanged. The evidence gate stays a dense top-1 test
+(0.35) and chunk scores stay the dense cosine, so the citation
+contract is unchanged. Admissibility was computed free before any
+provider run: the harness reproduced the P7.2 baseline (C = 23,
+ranks 11/11/18), the reranker puts chunk 11 into d02's context
+(position 4) and chunk 27 into d09's (position 4 full-batch,
+position 5 under the shipped 5-pair sub-batches) with no
+baseline-present fact lost, so the new ceiling is C′ = 26; the
+projected mean prompt tokens are 2544 against a 3000 admissibility
+bar; memory peaks at 324.2 MB under concurrency 10 in a 512 MB
+container (the fit needed sub-batching, the ORT arena off, an
+inference lock and glibc malloc tuning — the arena alone grows past
+1.3 GB); rerank p95 is 339 ms in the foreground. Sub-batching
+changes the int8 model's scores (dynamic activation quantization),
+so admissibility was re-verified under the shipped scoring.
+Frozen throughout: questions, scorer regexes, evidence threshold,
+cache τ 0.86, prompt p7-v3, embedding model, chunker, corpus,
+held-out manifest. Tuned on the same 12 questions; held-out check
+is Project 9.
+
+Method. Runs A4 (2026-11-13) and B4 (2026-11-14) use image
+`docmind-service:p73` (commits `9178775`–`21a1e3a`) and the same
+configuration, corpus and questions as A3/B3. A4's first pass and
+one repair round hit a total provider 503 wall (0 spent); a runtime
+restart then killed a repair round mid-run, losing 8 calls' results
+before the merge (no ledger rows — rows are written at merge); 3
+further rounds completed the run. B4's first pass hit 8 questions
+at 503 and took 3 repair rounds. R1 was re-checked last, on arm
+only, 1 repeat.
+
+| Gate | Threshold | Run A4 | Run B4 |
+|---|---|---|---|
+| S1 key facts | ≥ 22 / 26 in both runs | 23 / 26 (23 of 26 groundable) | 24 / 26 (24 of 26 groundable) |
+| S2 abstentions | ≥ 3 / 4 | 4 / 4 | 4 / 4 |
+| S3a valid citations | ≥ 0.95 | 1.000 | 1.000 |
+| S3b answers with citation | ≥ 0.90 | 1.000 | 1.000 |
+| S4 citation supports fact | ≥ 0.75 target | 1.000 | 1.000 |
+| S5 mean prompt tokens | ≤ 3200 | 2782.8 | 2782.8 |
+
+Per-question, A4 vs B4 (facts found / total): d01 2/2, 2/2; d02 3/3,
+3/3; d03 1/2, 1/2; d04 2/2, 2/2; d05 2/2, 2/2; d06 2/2, 2/2; d07 2/3,
+3/3; d08 2/2, 2/2; d09 2/2, 2/2 — both previously-absent facts
+recovered in both runs; d10 2/2, 2/2; d11 2/2, 2/2; d12 1/2, 1/2.
+No document question was refused in either run. a01 and a02
+abstained by refusal in both runs; a04 abstained by refusal in
+both runs; a03 abstained in prose in both runs (no formal refusal,
+answer text matches the abstention pattern).
+
+What the two runs say together. The pre-registered gate is met in
+both runs (23 and 24 against ≥ 22), and the reranker did exactly
+the work the design check predicted: d02 and d09 — the two
+questions whose facts the dense top-10 could not reach — score
+full marks in both runs, and nothing the dense stage grounded was
+lost. The remaining losses are the ones the design check flagged
+as at-risk and not design targets: d03 and d12 are scorer-phrasing
+losses (the answers state the content in words the frozen regexes
+do not match), and d07's sinusoid fact is a genuine omission that
+B4 recovered and A4 did not — the only run-to-run difference, and
+the honest size of provider nondeterminism on this set once the
+systematic losses are addressed. S2 held at 4/4 in both runs with
+no safety regression: the absent questions that abstained in A3/B3
+abstained again. R1 re-check (on arm, 1 repeat): 0/15 attacks
+succeeded, model resisted 15/15 — the reranker did not weaken
+injection resistance (the harness bypasses retrieval by design).
+Provider spend for P7.3: 62 recorded requests (A4 21, B4 26, R1
+15) against the 80 cap, plus 1 release-smoke on the implementation
+push. Project 7 closes here: the reranker ships on
+(`RERANKER_ENABLED` default true), and there is no P7.4.
+
 ### Project 6 vs Project 7 on the same questions
 
 | | P6 baseline (single) | P6 single call | P6 multi-agent | P7 run A | P7 run B |
@@ -378,6 +463,7 @@ tuned settings.
 | Project 6, initial | 16 / 26 = 61.5% | 800-word chunks, top-k 4 |
 | Project 6, tuned | 24 / 26 = 92.3% | 150-word chunks, 25-word overlap, top-10 |
 | Project 7 | 23 / 26 † = 88.5% | pgvector top-10, 150/25 chunks, ONNX MiniLM (the E3 measurement) |
+| Project 7, P7.3 | 26 / 26 = 100% | dense top-25 reranked to top-10 by the ONNX cross-encoder (E3 on the final context; the dense stage alone still measures 23 / 26) |
 | Project 5 | to be measured | the common-set comparison runs in Project 9 |
 | Project 9 | to be measured | held-out set: `evaluation/heldout/manifest.json` |
 

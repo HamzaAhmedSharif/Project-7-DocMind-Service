@@ -21,6 +21,7 @@ flowchart LR
   Q --> R[Retriever: PgStore]
   Q --> L[LLMClient: hosted adapter, throttled]
   R --> E[ONNX embedder - fastembed MiniLM-L6-v2]
+  R --> X[Cross-encoder reranker - ONNX MiniLM-L-6-v2]
   R --> PG[(Postgres + pgvector)]
   AUTH --> CACHE[(semantic cache - same Postgres)]
   API --> M[/metrics + JSON logs/]
@@ -41,6 +42,7 @@ tests and CI need no secrets, GPU or network.
 | Query core | `docmind_service/query.py` | retrieve, gate, prompt, call, validate, refuse-or-answer |
 | Store | `docmind_service/store.py` | pgvector retrieval, corpus version, document and chunk writes |
 | Embedder | `docmind_service/embedding.py` | ONNX embeddings, LRU query cache, a hashing fallback for offline CI |
+| Reranker | `docmind_service/rerank.py` | ONNX cross-encoder reordering of the dense top-25 (P7.3); serialised inference in 5-pair sub-batches, dense-order fallback on any error |
 | LLM adapter | `docmind_service/llm.py` | OpenAI-compatible client, provider pacing against the token bucket, call accounting |
 | Auth | `docmind_service/auth.py` | API keys (prefix + SHA-256 stored), tenants, scopes |
 | Limits | `docmind_service/ratelimit.py` | per-IP minute window (in process), daily cap (Postgres `usage_daily`, shared across containers on one database) |
@@ -62,11 +64,13 @@ tests and CI need no secrets, GPU or network.
 3. The semantic cache is consulted (keyed tenants and the demo alike, by
    tenant + corpus version + question embedding at threshold 0.86). A hit
    returns the stored validated answer and spends no provider call.
-4. Retrieval embeds the question and takes the top-k chunks by cosine
-   similarity from the caller's tenant. The evidence gate keeps only chunks
-   at or above the caller's corpus threshold (paper 0.35, demo 0.52); if
-   nothing survives, the answer is a `low_evidence` refusal and the provider
-   is never called.
+4. Retrieval embeds the question and takes the top-25 chunks by cosine
+   similarity from the caller's tenant; the cross-encoder reranker
+   (P7.3) reorders them and the top-10 go into the prompt. Chunk
+   scores stay the dense cosine. The evidence gate is a top-1 test
+   on the dense score (paper 0.35, demo 0.52): if the best chunk
+   scores below the threshold, the answer is a `low_evidence`
+   refusal and the provider is never called.
 5. Prompt v2 assembles the surviving chunks as untrusted context (fake
    citations and delimiter runs neutralized, canary included) and the
    adapter calls the provider, pacing against its token limits.

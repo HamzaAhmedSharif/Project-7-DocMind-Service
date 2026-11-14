@@ -44,14 +44,21 @@ Face Space: https://hamzaahmedsharif-docmind-service.hf.space/ (Space page:
 https://huggingface.co/spaces/HamzaAhmedSharif/DocMind-Service). The front
 end calls the real FastAPI app in-process (anonymous, public tenant) over
 the seeded NIST demo corpus, with the demo configuration from
-`deploy/release.env`. The service code is this repository at `79c596a`,
+`deploy/release.env`. The service code is this repository at `21a1e3a`,
 copied unchanged; only the front end is new, and one dependency pin
 differs in the Space (`pydantic` 2.11.10; Gradio 5.49.1 requires < 2.12).
+The P7.3 cross-encoder model (23 MB) is downloaded at Space startup
+from the public Xenova repo — the Space uploader cannot carry it —
+and verified by hash; if the download fails the Space runs dense-only
+rather than failing to boot.
 The Space sleeps when idle on the free tier and is capped at 300
 questions/day by the same Postgres-backed demo cap as every other
 instance. Verified live on 2026-11-07: an on-corpus question answered
 with page citations, a novel on-corpus question generated live (1 LLM
-call), and an off-corpus question refused (`low_evidence`). The demo is a
+call), and an off-corpus question refused (`low_evidence`). Verified
+live again after the P7.3 re-sync (2026-11-14): a novel on-corpus
+question answered with page citations (1 LLM call, cache miss) and
+a repeat question served from the cache (0 calls). The demo is a
 convenience for readers; the release verification above remains the
 deployment evidence for the gated image. The decision and its recorded
 reservations are in `DECISIONS.md`.
@@ -66,6 +73,7 @@ flowchart LR
   Q --> R[Retriever: PgStore]
   Q --> L[LLMClient: hosted adapter, throttled]
   R --> E[ONNX embedder - fastembed MiniLM-L6-v2]
+  R --> X[Cross-encoder reranker - ONNX MiniLM-L-6-v2]
   R --> PG[(Postgres + pgvector)]
   AUTH --> CACHE[(semantic cache - same Postgres)]
   API --> M[/metrics + JSON logs/]
@@ -188,6 +196,20 @@ phrasing, and one omission. The red-team re-check held at 0/15
 with guardrails on. Tuned on the same 12 questions; held-out
 check is Project 9. Full numbers and the per-question record:
 `docs/EVALUATION.md`, `DECISIONS.md`.
+
+Retrieval unfrozen (P7.3, 2026-11-13/14): the owner decided to spend
+Project 9's retrieval lever inside Project 7 — a local ONNX
+cross-encoder reranker (dense top-25 reranked to top-10),
+pre-registered with a free admissibility check (new ceiling 26/26,
+memory 324 MB under a 512 MB limit, rerank p95 339 ms) and a final
+stop rule. Measured after remediation (post-hoc iteration, tuned on
+the evaluation questions): run A4 23/26 and run B4 24/26 — the S1
+gate met in both runs; d02 and d09, the two questions the dense
+top-10 could not ground, score full marks in both runs. S2 4/4 in
+both runs, no safety regression, and the red-team re-check held at
+0/15 with guardrails on. Tuned on the same 12 questions; held-out
+check is Project 9. The reranker ships on. Full numbers and the
+per-question record: `docs/EVALUATION.md`, `DECISIONS.md`.
 
 ## Quick start
 
