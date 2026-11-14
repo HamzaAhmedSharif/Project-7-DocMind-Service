@@ -14,11 +14,12 @@ RUN python -c "from fastembed import TextEmbedding; TextEmbedding('sentence-tran
 # load drops to ~250 MB. No effect on scores or behaviour. (Placed here,
 # after the pip/embedder layers, so editing it does not rebuild them.)
 ENV MALLOC_ARENA_MAX=2 MALLOC_TRIM_THRESHOLD_=65536
-# P7.3: the cross-encoder reranker model is copied from the build context
-# (models/<model-id>/...), never downloaded at build time; fetch it first
-# with `python scripts/fetch_reranker.py --model <id> --out models`.
-# The directory is gitignored; see docs/OPERATIONS.md.
-COPY models/ /opt/models/
+# P7.3: the cross-encoder reranker model is fetched at build time with
+# hash verification (scripts/fetch_reranker.py, stdlib only), so a plain
+# `docker build .` works from a clean clone. The model is never committed.
+# Builders without Hub access can point HF_ENDPOINT at a mirror.
+COPY scripts/fetch_reranker.py /tmp/fetch_reranker.py
+RUN python /tmp/fetch_reranker.py --model Xenova/ms-marco-MiniLM-L-6-v2 --out /opt/models
 ARG GIT_SHA=
 ENV DOCMIND_GIT_SHA=$GIT_SHA
 COPY docmind_service ./docmind_service

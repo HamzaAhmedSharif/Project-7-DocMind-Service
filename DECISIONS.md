@@ -1144,3 +1144,61 @@ Notes are recorded in the milestone sections below.
 - Project 7 is CLOSED — passed. Full S1 record: A 10/26, B 16/26
   (M8); A2 22/26, B2 17/26 (P7.1); A3 20/26, B3 21/26 (P7.2);
   A4 23/26, B4 24/26 (P7.3). No P7.4.
+
+## Presentation polish — recruiter audit fixes (2026-11-14)
+
+- Recruiter audit received 2026-11-14 (relayed by the owner;
+  produced outside this repo) and verified claim-by-claim against
+  the repo before acting: the counts check out exactly (296 test
+  functions in 39 files, main.py 759 lines, DECISIONS.md 1,146
+  lines, README 250 lines, 0 images, 0 tags, version 0.1.0, 7 open
+  Dependabot PRs, no mypy or coverage in CI, personal paths in 5
+  reports files, the Dockerfile failing from a clean clone). The
+  core finding stands: the README's first numbers were the M8
+  failure (S1 10/26, 16/26), with the passing P7.3 results buried
+  100 lines down.
+- This pass is presentation polish, NOT a P7.4: no re-measurement,
+  no gate change, no behaviour change. The evaluation record is
+  untouched.
+- README restructured (250 → 204 lines): a Current results table
+  (A4/B4) leads; the M8 generated gate table is kept byte-identical
+  below it, labelled as the M8 record — the audit's suggestion to
+  regenerate it from P7.3 data was rejected, because overwriting
+  the pre-registered record would erase history. The three
+  remediation paragraphs condensed to one summary; the tuning
+  disclosure kept once; the two corpora (eval paper vs demo NIST
+  docs) clarified; Quick Start is bash-first with PowerShell in a
+  collapsed block; the M5 numbers are labelled with their date and
+  commit. The README at b0d1f0f was also found truncated mid-word
+  in the Documents section (a close-out transfer fault); the
+  rewrite restores the full list.
+- Screenshots added under docs/images/ (live demo, M8 gate table,
+  P7.3 results, CI history); the demo shot leads the README.
+- Dockerfile now fetches the reranker model at build time with
+  hash verification (scripts/fetch_reranker.py), so a plain
+  docker build works from a clean clone; the CI pre-fetch steps
+  are removed as redundant. Builders without Hub access can point
+  HF_ENDPOINT at a mirror. Verified by a full laptop Docker build
+  (image docmind-service:polish, 2026-11-14): the fetch step
+  downloads all four model files with hash verification. (The
+  laptop host network cannot reach the Hub, but Docker's network
+  can.)
+- CI: the unit job reports line coverage (pytest-cov, artifact
+  coverage.xml); unit coverage measured 82% (301 tests). New
+  non-blocking mypy job: 25 errors on first run (mostly
+  tuple|None indexing in db.py/store.py and untyped third-party
+  imports), recorded here as known debt rather than fixed in a
+  polish pass; the job surfaces the count without failing the
+  build.
+- Hygiene: personal machine paths scrubbed from reports/ (5 files;
+  replaced with <repo>, <home>, <env> placeholders); .gitignore
+  lines for STATE.md and reports/ removed (both are tracked and
+  intentionally public); docs/SECURITY.md renamed to
+  docs/THREAT-MODEL.md (the root SECURITY.md keeps the policy).
+  DECISIONS.md's own mentions of the old name are left as written:
+  they are historical record.
+- main.py (759 lines, next largest file 286) is noted as a known
+  structural trade-off: all routes, auth wiring, rate limiting,
+  cache scoping and logging in one file. Not refactored — splitting
+  routers in a verified system risks behaviour change for no
+  measured gain; the refactor is P10 work, not P7 polish.

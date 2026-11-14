@@ -6,7 +6,8 @@ tests
 evaluation
 docs
 deploy
-scripts
+scripts/*
+!scripts/fetch_reranker.py
 *.md
 .env*
 __pycache__

@@ -121,6 +121,25 @@ Service` (uid `docmind`) is provisioned from
 
 Plain Docker (release image): see "How to run the release image" above.
 
+### Local smoke test (write path)
+
+The CI-mode smoke exercises the write path against the local compose
+stack. It creates a throwaway key, uploads a document, queries it, and
+checks the refusal and rate-limit behaviour:
+
+```bash
+docker compose -f deploy/compose.ci.yml up -d --build --wait
+SMOKE_KEY=$(docker compose -f deploy/compose.ci.yml exec -T app \
+  python -m docmind_service.admin create-key --tenant smoke-ci --label ci --write \
+  | sed -n '/^-----BEGIN DOCMIND KEY-----$/{n;p;}')
+DOCMIND_SMOKE_KEY="$SMOKE_KEY" python scripts/smoke_http.py \
+  --base http://127.0.0.1:8000 --mode ci --api-key-env DOCMIND_SMOKE_KEY
+docker compose -f deploy/compose.ci.yml down -v
+```
+
+This is the same flow the CI `image` job runs. On Windows, the
+PowerShell equivalent is in the README's Quick start.
+
 ### Settings (every `Settings` field)
 
 Environment variables carry the `DOCMIND_` prefix. Secret values are
@@ -328,7 +347,7 @@ Full per-run data: `evaluation/results/load-m7.json`. Gates: L1
   restart; Prometheus counters are per process. (The daily cap is
   Postgres-backed — see Free-tier behavior.)
 - Query-log redaction is regex-based; novel PII formats can slip
-  through (see `docs/SECURITY.md`).
+  through (see `docs/THREAT-MODEL.md`).
 - No availability promise is made: the only service levels stated are
   measured numbers with their conditions (this file and
   `docs/FACTS.md`).

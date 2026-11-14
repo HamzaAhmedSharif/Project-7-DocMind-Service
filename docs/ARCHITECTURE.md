@@ -114,7 +114,7 @@ tests and CI need no secrets, GPU or network.
 - **Refusals as first-class outcomes.** A question the evidence cannot
   support is a measured result, not an error: the abstention and refusal
   behaviour is itself gated (S2, and the red-team in
-  `docs/SECURITY.md`).
+  `docs/THREAT-MODEL.md`).
 - **One worker, honestly.** The per-IP limiter is in-process, so the
   service is a single-instance design; the load numbers in
   `docs/FACTS.md` are stated for that shape, and the capacity model in
