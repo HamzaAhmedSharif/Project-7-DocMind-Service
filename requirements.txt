@@ -12,6 +12,6 @@ fastembed==0.9.1
 # versions match requirements.lock).
 onnxruntime==1.31.1
 tokenizers==0.23.3
-pypdf==6.21.4
+pypdf==7.1.0
 openai==3.49.0
 prometheus-client==0.26.0
